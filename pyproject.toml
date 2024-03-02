@@ -1,0 +1,52 @@
+[build-system]
+
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+
+name = "citkid"
+version = "0.0"
+description = "Kinetic Inductance Detector data acquisition and analysis"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE.txt"}
+keywords = ["kinetic inductance detector"]
+
+  authors = [
+    {name = "Logan Foote", email = "lfoote@caltech.edu"}
+  ]
+
+  maintainers = [
+    {name = "Logan Foote", email = "lfoote@caltech.edu"}
+  ]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "License :: Apache-2.0",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+dependencies = [
+  "numpy",
+  "scipy",
+  "pandas",
+  "matplotlib",
+  "pyfftw",
+  "numba"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/loganfoote/citkid"
+"Bug Reports" = "https://github.com/loganfoote/citkid/issues"
+
+[tool.setuptools]
+package-data = {}
