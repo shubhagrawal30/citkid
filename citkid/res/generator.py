@@ -170,7 +170,7 @@ def get_ranges(frange):
     arange (tuple): lower and upper limit on a
     """
     frrange = np.array((frange[0] * 1.05, frange[1] * 0.95)) # fr
-    Qrrange = np.array((1e3, 50e3)) # Qr
+    Qrrange = np.array((1e3, 200e3)) # Qr
     amprange = np.array((1e-5, 1 - 1e-5)) # amp
     phirange = np.array((-np.pi, np.pi)) # phi
     arange = np.array((0, 2)) #a

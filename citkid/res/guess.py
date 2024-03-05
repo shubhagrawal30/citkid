@@ -1,4 +1,6 @@
 import numpy as np
+# import citkid.res.fitter
+from scipy import signal
 
 def guess_p0_nonlinear_iq(f, z):
     """
@@ -12,44 +14,61 @@ def guess_p0_nonlinear_iq(f, z):
     Returns:
     p0 (list):
     """
-    # guess f0, furthest distance from offres in IQ space
-    offres_z = np.mean(np.roll(z, 10)[:20])
-    distance = abs(z - offres_z)
-    fr_guess_index = np.argmax(distance)
-    fr_guess = f[fr_guess_index]
+    f, z = f.copy(), z.copy()
+    # i0 and q0 guess
+    z0_guess = 1. + 0.j
+    i0_guess = np.real(z0_guess)
+    q0_guess = np.imag(z0_guess)
+
+    # cable delay guess tau
+    tau_guess = 0
+
+    # guess f0 from largest spacing
+    # largest spacing works better than distance from offres or min(S21)
+    fdiff = np.mean([f[1:], f[:-1]], axis = 0)
+    zdiff = abs(np.diff(z))
+    peak, _ = signal.find_peaks(zdiff, height = (max(zdiff) + min(zdiff)) / 8)
+    if not len(peak):
+        peak = len(zdiff) // 2
+        width  = len(zdiff) / 4 # I haven't checked this
+    else:
+        peak = peak[len(peak) // 2]
+        width = signal.peak_widths(zdiff, [peak], rel_height = 0.5)[0][0]
+    fr_guess = fdiff[peak]
+    width_spac = np.median(fdiff[1:] - fdiff[:-1]) * width
 
     # guess Q by finding the FWHM around fr_guess
-    # Subtract offres dB, then take absolute value to get width
-    # This still doesn't work well for low-Q high phi resonators. There is
-    # room to improve.
-    # Try fitting to spacing difference.
-    dB = 20 * np.log10(abs(z))
-    dB -= np.mean(np.roll(dB, 10)[:20])
-    dB = abs(dB)
-    i_cent = np.argmax(dB)
-    dBmax = dB[i_cent]
-    diff = abs(dB - dBmax + 3)
-    ix0 = np.argmin(diff[:i_cent])
-    ix1 = np.argmin(diff[i_cent:]) + i_cent
-    Q_guess = fr_guess / (f[ix1] - f[ix0])
-
-    # guess amp
-    dB = 20 * np.log10(np.abs(z))
-    depth = np.max(dB) - np.min(dB)
-    if depth > 50:
-        amp_guess = 0.9
-    elif depth > 30:
-        amp_guess = 0.8
+    # Use the width of the distance of z from the off resonance data
+    # This works better than S21 or spacing
+    zdist = abs(z - np.mean(np.concatenate([z[:5], z[-5:]])))
+    peak, _ = signal.find_peaks(zdist, height = (max(zdist) + min(zdist)) / 4)
+    if not len(peak):
+        peak = len(zdist) // 2
+        width  = len(zdist) / 8 # I haven't checked this
     else:
-        # polynomial fit to amp versus depth.
-        poly = [0.03130349, 0.]
-        amp_guess = np.polyval(poly, depth)
+        peak = peak[len(peak) // 2]
+        width = signal.peak_widths(zdist, [peak], rel_height = 0.5)[0][0]
+    width_dist = np.median(f[1:] - f[:-1]) * width
+    p = [0.95155596, 1.03605832]
+    Qr_guess = np.exp(np.polyval(p, np.log(fr_guess / width_dist)))
 
     # guess impedance rotation phi
-    # You can't do much better than this, because a lot of the observable
-    # parameters are cyclical in pi / 2 intervals of phi, and depend heavily
-    # on other parameters
-    phi_guess = 0
+    # This guess is only useful if the curve is rotated before fitting, because
+    # around phi = pi or phi = -pi, the fit will jump back and forth between the
+    # bounds
+    diff = abs(f - fr_guess)
+    ix = np.argsort(diff)[:2]
+    phi_guess = np.angle(1 - np.mean(z[ix]))
+    phi_guess -= 2 * np.pi * (phi_guess // (2 * np.pi))
+
+    # guess amp
+    # For amp, remove phase first
+    amp_guess = np.max(np.real(z)) - np.min(np.real(z))
+    d = np.max(20 * np.log10(np.abs(z))) - np.min(20 * np.log10(np.abs(z)))
+    if d>30:
+        amp_guess = 0.99
+    else:
+        amp_guess = 0.0037848547850284574 + 0.11096782437821565 * d - 0.0055208783469291173 * d ** 2 + 0.00013900471000261687 * d ** 3 + -1.3994861426891861e-06 * d ** 4  # polynomial fit to amp verus depth
 
     # guess non-linearity parameter
     diff = abs(z[1:] - z[:-1])
@@ -60,14 +79,10 @@ def guess_p0_nonlinear_iq(f, z):
         a_guess = 1
     else:
         a_guess = np.polyval([ 0.21535156, -0.51811171], spacing)
+    # a_guess = 0.1
 
-    # i0 and q0 guess
-    i0_guess = (np.real(z[0]) + np.real(z[-1])) / 2.
-    q0_guess = (np.imag(z[0]) + np.imag(z[-1])) / 2.
 
-    # cable delay guess tau
-    tau_guess = 0
 
-    p0 = [fr_guess, Q_guess, amp_guess, phi_guess, a_guess, i0_guess, q0_guess,
+    p0 = [fr_guess, Qr_guess, amp_guess, phi_guess, a_guess, i0_guess, q0_guess,
           tau_guess]
     return p0

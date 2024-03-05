@@ -1,7 +1,8 @@
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy import optimize
 from .funcs import nonlinear_iq_for_fitter, nonlinear_iq
 from .util import bounds_check, calculate_chi_squared
+from .plot import *
 from .guess import guess_p0_nonlinear_iq
 
 def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
@@ -45,8 +46,8 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     f, z = f[ix], z[ix]
     if bounds is None:
         # default bounds
-        bounds = ([np.min(f), 50, .01, -np.pi, 0, -np.inf, -np.inf, -1.0e-6],
-                  [np.max(f), 200000, 1, np.pi, 5, np.inf, np.inf, 1.0e-6])
+        bounds = ([np.min(f), 50, .01, -np.pi, 0, -1e2, -1e2, -1.0e-6],
+                  [np.max(f), 200000, 1, np.pi, 5, 1e2, 1e2, 1.0e-6])
     if p0 is None:
         # default initial guess
         p0 = guess_p0_nonlinear_iq(f, z)
@@ -54,9 +55,16 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
         p0[0] = fr_guess
     if tau_guess is not None:
         p0[7] = tau_guess
-    z_stacked = np.hstack((np.real(z), np.imag(z)))
+    # Rotate the whole curve by guess_phi before fitting
+    phi_guess = p0[3]
+    p0[3] = 0
+    z_rotated = (1 - (1 - z) * np.exp(-1j * phi_guess))
+    # Stack z data
+    z_stacked = np.hstack((np.real(z_rotated), np.imag(z_rotated)))
     # check bounds
     bounds = bounds_check(p0, bounds)
+
+
     # fit
     if not fit_tau:
         # Fit with tau enforced from p0[7]
@@ -65,23 +73,56 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
         del p0[7]
         def fit_func(x_lamb, a, b, c, d, e, f, g):
             return nonlinear_iq_for_fitter(x_lamb, a, b, c, d, e, f, g, tau)
-        popt, pcov = curve_fit(fit_func, f, z_stacked, p0, bounds = bounds)
+        print(p0)
+        popt, pcov = optimize.curve_fit(fit_func, f, z_stacked, p0, bounds = bounds)
         popt = np.insert(popt, 7, tau)
         # fill covariance matrix
         cov = np.ones((pcov.shape[0] + 1, pcov.shape[1] + 1)) * -1
         cov[0:7, 0:7] = pcov[0:7, 0:7]
         pcov = cov
     else:
-        try:
-            # Fit without enforcing tau
-            popt, pcov = curve_fit(nonlinear_iq_for_fitter, f, z_stacked,
-                                   p0, bounds = bounds)
-        except Exception as e:
-            print(p0, bounds)
-            raise e
+        # Fit without enforcing tau
+        popt, pcov = optimize.curve_fit(nonlinear_iq_for_fitter, f, z_stacked,
+                               p0, bounds = bounds)
+    # Remove phi rotation from p
+    popt[3] += phi_guess
+    popt[3] -= 2 * np.pi * (popt[3] // (2 * np.pi))
+    p0[3] = phi_guess
     # Create popt standard error and calculate chi squared
     z_fit = nonlinear_iq(f, *popt)
     popt_err = np.sqrt(np.diag(pcov))
     chi_sq, p_value = calculate_chi_squared(z = z, z_fit = z_fit)
     red_chi_sq = chi_sq / len(z)
     return p0, popt, popt_err, red_chi_sq, p_value
+
+def fit_iq_circle(f, z, plotq = False):
+    '''Fits an IQ loop to a circle. The function describing the circle is
+
+       [Re(S21)-A]^2 + [Im(S21)-B]^2 = R^2
+
+       where the origin is (A, B) and the radius is R.
+
+    Parameters:
+    f (np.array): frequency data
+    z (np.array): complex S21 data
+    plotq (bool): if True, plots the fit and data
+
+    Returns:
+    popt (list): fit parameters (A, B, R).
+    popt_err (list): standard error on fit parameters -> not implemented yet
+    fig, ax (pyplot figure and axis): fit figure and axis, or None if not plotq
+    '''
+    def objective(params, x, y):
+        A, B, R = params
+        error = sum(((x-A)**2+(y-B)**2-R**2)**2)
+        return error
+    I, Q = np.real(z), np.imag(z)
+    x0 = ((max(I)+min(I))/2, (max(Q)+min(Q))/2, (max(I)-min(I)+max(Q)-min(Q))/4)
+    args = (I, Q)
+    popt = optimize.fmin(objective, x0, args, disp=0)
+
+    if plotq:
+        fig, ax = plot_circle(z, *popt)
+    else:
+        fig, ax = None, None
+    return popt, fig
