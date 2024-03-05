@@ -1,15 +1,16 @@
 import numpy as np
-from numba import jit
+from numba import jit, vectorize
 from scipy import stats
 
-def calc_qc_qi(qr, amp):
+def calc_qc_qi(qr, amp, phi):
     """
     Calculates Qc and Qi from Qr and amp, where amp = Qr / Qc and
     1 / Qr = 1 / Qc + 1 / Qi
 
     Parameters:
     qr (float): total quality factor
-    amp (float): qr / qc
+    amp (float): qr / ac
+    phi (float): impedance mismatch angle
 
     Returns:
     qc (float): coupling quality factor
@@ -46,9 +47,9 @@ def bounds_check(p0, bounds):
             upper_bounds.append(ub)
     return lower_bounds, upper_bounds
 
-def calculate_chi_squared(z, z_fit):
+def calculate_residuals(z, z_fit):
     """
-    Given IQ data and fitted IQ data, return chi squared and the p value
+    Given IQ data and fitted IQ data, return the chi squared value and p value
 
     Parameters:
     z (np.array, complex): array of measured S21 data
@@ -56,17 +57,13 @@ def calculate_chi_squared(z, z_fit):
 
     Returns:
     chi_sq (float): chi squared value
-    p_value (float): p value
     """
-    real_fit = np.real(z_fit)
-    imag_fit = np.imag(z_fit)
-    real_meas = np.real(z)
-    imag_meas = np.imag(z)
-    obs_delta = np.sqrt((real_fit - real_meas) ** 2.0 + (imag_fit - imag_meas) ** 2.0)
-    chi_sq, p_value = stats.chisquare(f_obs=obs_delta)
-    return chi_sq, p_value
+    z = np.hstack((np.real(z), np.imag(z)))
+    z_fit = np.hstack((np.real(z_fit), np.imag(z_fit)))
+    res = np.sqrt(sum((z - z_fit)**2)) / len(z)
+    return res
 
-@jit(nopython=True)
+@vectorize(nopython=True)
 def cardan(a, b, c, d):
     """
     Analytical root finding.
@@ -111,5 +108,3 @@ def cardan(a, b, c, d):
     else:
         # one real root get the value that has the smallest imaginary component
         return np.real(roots[np.argsort(np.abs(np.imag(roots)))][0])
-    # return np.max(np.real(roots[where_real]))
-    # return np.asarray((u+v-z0, u*J+v*Jc-z0,u*Jc+v*J-z0))
