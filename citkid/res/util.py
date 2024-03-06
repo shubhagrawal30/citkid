@@ -1,6 +1,7 @@
 import numpy as np
 from numba import jit, vectorize
 from scipy import stats
+from scipy import signal
 
 def calc_qc_qi(qr, amp, phi):
     """
@@ -9,7 +10,7 @@ def calc_qc_qi(qr, amp, phi):
 
     Parameters:
     qr (float): total quality factor
-    amp (float): qr / ac
+    amp (float): Qr / Qc
     phi (float): impedance mismatch angle
 
     Returns:
@@ -23,8 +24,7 @@ def calc_qc_qi(qr, amp, phi):
 def bounds_check(p0, bounds):
     """
     Checks that p0 is strictly within the bounds. If not, modifies bounds to be
-    10% lower or higher than p0. I need to check that this is OK for parameters
-    like phi that are cyclical.
+    10% lower or higher than p0.
 
     Parameters:
     p0(np.array): initial guesses for all parameters
@@ -38,15 +38,22 @@ def bounds_check(p0, bounds):
     upper_bounds = []
     for p, lb, ub in zip(p0, bounds[0], bounds[1]):
         if p <= lb:
-            lower_bounds.append(p * 0.9)
+            if p > 0:
+                lower_bounds.append(p * 0.9)
+            else:
+                lower_bounds.append(p * 1.1)
         else:
             lower_bounds.append(lb)
         if p >= ub:
-            upper_bounds.append(p * 1.1)
+            if p > 0:
+                upper_bounds.append(p * 1.1)
+            else:
+                upper_bounds.append(p * 0.9)
         else:
             upper_bounds.append(ub)
     return lower_bounds, upper_bounds
 
+@jit(nopython=True)
 def calculate_residuals(z, z_fit):
     """
     Given IQ data and fitted IQ data, return the chi squared value and p value
@@ -60,13 +67,13 @@ def calculate_residuals(z, z_fit):
     """
     z = np.hstack((np.real(z), np.imag(z)))
     z_fit = np.hstack((np.real(z_fit), np.imag(z_fit)))
-    res = np.sqrt(sum((z - z_fit)**2)) / len(z)
+    res = np.sqrt(sum((z - z_fit) ** 2)) / len(z)
     return res
 
 @vectorize(nopython=True)
 def cardan(a, b, c, d):
     """
-    Analytical root finding.
+    Analyticaly calculates the largest real root of a 3rd-order polynomial
     Based on code from https://github.com/Wheeler1711/submm_python_routines
 
     Parameters:
@@ -99,12 +106,33 @@ def cardan(a, b, c, d):
     else:
         v *= J
     roots = np.asarray((u + v - z0, u * J + v * Jc - z0, u * Jc + v * J - z0))
-    # print(roots)
     where_real = np.where(np.abs(np.imag(roots)) < 1e-15)
-    # if len(where_real)>1: print(len(where_real))
-    # print(D)
     if D > 0:
-        return np.max(np.real(roots))  # three real roots
+        # three real roots: return the max
+        return np.max(np.real(roots))
     else:
-        # one real root get the value that has the smallest imaginary component
+        # one real root: return value with smalles imaginary component
         return np.real(roots[np.argsort(np.abs(np.imag(roots)))][0])
+
+def get_peak_fwhm(x, y):
+    """
+    Gets the index and fwhm of a peak in (x, y) data. x data must be evenly
+    sampled.
+
+    Parameters:
+    x (np.array): x data
+    y (np.array): y data
+
+    Returns:
+    peak_index (int): index of the peak
+    fwhm (float): width in x units
+    """
+    peak_index, _ = signal.find_peaks(y, height = (max(y) + min(y)) / 8)
+    if not len(peak_index):
+        peak_index = len(y) // 2
+        width  = len(y) / 8 # Need to modify this later
+    else:
+        peak_index = peak_index[len(peak_index) // 2]
+        width = signal.peak_widths(y, [peak_index], rel_height = 0.5)[0][0]
+    fwhm = np.median(x[1:] - x[:-1]) * width
+    return peak_index, fwhm

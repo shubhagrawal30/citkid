@@ -1,8 +1,7 @@
 import numpy as np
 import citkid.res.fitter as fitter
-from scipy import signal
-from .util import cardan
-
+from .util import get_peak_fwhm
+from scipy.ndimage import gaussian_filter
 
 def guess_p0_nonlinear_iq(f, z):
     """
@@ -13,137 +12,77 @@ def guess_p0_nonlinear_iq(f, z):
     Parameters:
     f (np.array): array of frequency data in Hz
     z (np.array): array of complex S21 data
+
     Returns:
-    p0 (list):
+    p0 (list): initial guess fit parameters
+        [fr, Qr, amp, phi, a, i0, q0, tau]
     """
-    f, z = f.copy(), z.copy()
-    # i0 and q0 guess
+    # guess i0 and q0
     z0_guess = np.mean(np.concatenate([z[:2], z[-2:]]))
     i0_guess = np.real(z0_guess)
     q0_guess = np.imag(z0_guess)
-
-    # Guess Qr
-    Qr_guess, dist_index = guess_Qr(f, z, z0_guess)
-
-    # Guess a
-    a_guess = guess_a_nl(f, z, Qr_guess)
-
-    # Guess phi and amp
+    # guess tau
+    tau_guess = 0
+    # guess phi and amp
     phi_guess, amp_guess = guess_phi_amp(z, z0_guess)
-
-    # Guess fr
-    fr_guess = np.mean(f)
+    # guess Qr
+    Qr_guess = guess_Qr(f, z, z0_guess, phi_guess)
+    # guess a and fr
+    a_guess, fr_guess = guess_a_fr(f, z, Qr_guess)
     # Package and return p0
-    p0 = [fr_guess, Qr_guess, amp_guess, phi_guess, a_guess, i0_guess, q0_guess]
+    p0 = [fr_guess, Qr_guess, amp_guess, phi_guess, a_guess,
+          i0_guess, q0_guess, tau_guess]
     return p0
 
-    # Next, with a good guess for fr, we can determine phi and amp really easily
-
-
-    # Left off here. Qr and a guesses are really good
-    #########################################################################################
-    # Code from submm
-
-    ##############################################################################################
-    # guess f0 from largest spacing
-    # largest spacing works better than distance from offres or min(S21)
-    fdiff = np.mean([f[1:], f[:-1]], axis = 0)
-    zdiff = abs(np.diff(z))
-    peak, _ = signal.find_peaks(zdiff, height = (max(zdiff) + min(zdiff)) / 8)
-    if not len(peak):
-        peak = len(zdiff) // 2
-        width  = len(zdiff) / 4 # I haven't checked this
-    else:
-        peak = peak[len(peak) // 2]
-        width = signal.peak_widths(zdiff, [peak], rel_height = 0.5)[0][0]
-    fr_guess = fdiff[peak]
-    width_spac = np.median(fdiff[1:] - fdiff[:-1]) * width
-    fr_index = peak
-
-    # guess impedance rotation phi
-    y_at_fr_dist = cardan(4.0, 0, 1.0, - a_guess)
-    z_adj = (1 - z[dist_index] / z0_guess) * (1 + 2j * y_at_fr_dist)
-    phi_guess = np.angle(z_adj)
-    # phi_guess = 0
-
-
-    # guess amp using polynomial fit
-    dB = 20 * np.log10(np.abs(z / z0_guess))
-    depth = np.max(dB) -  np.min(dB)
-    if depth > 50:
-        amp_guess = 0.9
-    elif depth > 30:
-        amp_guess = 0.5
-    else:
-        poly = [4.91802646e-05, -3.47894107e-03, 8.56340493e-02, 3.73634664e-03]
-        amp_guess = np.polyval(poly, depth)
-
-
-
-def guess_Qr(f, z, z0):
+def guess_Qr(f, z, z0, phi):
     """
-    Guesses Qr given complex S21 data. Accurate to within 30%
+    Guesses Qr given complex S21 data.
 
     Parameters:
     f (np.array): array of frequency data in Hz
     z (np.array): array of complex S21 data
     z0 (complex): z value off resonance
+    phi (float): impedance mismatch angle
 
     Returns:
-    Qr_guess (float): guess for Qr
-    dist_index (int): index at the point of furthest distance in the IQ plane
-        from the off-resonance data
+    Qr_guess (float): Qr guess
     """
-    zdist = abs(z - z0)
-    peak, _ = signal.find_peaks(zdist, height = (max(zdist) + min(zdist)) / 4)
-    if not len(peak):
-        peak = len(zdist) // 2
-        width  = len(zdist) / 8 # Need to modify this later
-    else:
-        peak = peak[len(peak) // 2]
-        width = signal.peak_widths(zdist, [peak], rel_height = 0.5)[0][0]
-    dist_index = peak
-    width_dist = np.median(f[1:] - f[:-1]) * width
-    p = [ 0.99993354, -0.55088388]
-    Qr_guess = 3.032441051857037 * np.exp(np.polyval(p, np.log(f[peak] / width_dist)))
-    return Qr_guess, dist_index
+    # rotate data, then filter
+    z_rot = abs((1 - z / z0) * np.exp(-1j * phi))
+    z_rot = gaussian_filter(z_rot, sigma = 10)
+    peak, fwhm = get_peak_fwhm(f, z_rot)
+    poly = [-0.38741422, 15.38414659]
+    Qr_guess = np.exp(np.polyval(poly, np.log(fwhm)))
+    return Qr_guess
 
-def guess_a_nl(f, z, Qr_guess):
+def guess_a_fr(f, z, Qr):
     """
-    Guesses the nonlinearity parameter
-    Accurate to within a factor of 2 for a = 0.1 to a = 2, can be up to a factor
-    of 10 off at low a
+    Guesses the nonlinearity parameter and resonance frequency
 
     Parameters:
     f (np.array): array of frequency data in Hz
     z (np.array): array of complex S21 data
-    Qr_guess (float): guess for the total quality factor
+    Qr (float): guess for the total quality factor
 
     Returns:
     a_guess (float): nonlinearity parameter guess
+    fr_guess (float): resonance frequency guess
     """
 
     fdiff = np.mean([f[1:], f[:-1]], axis = 0)
     zdiff = abs(np.diff(z))
-    peak, _ = signal.find_peaks(zdiff, height = (max(zdiff) + min(zdiff)) / 8)
-    if not len(peak):
-        peak = len(zdiff) // 2
-        width  = len(zdiff) / 8 # Need to modify this later
-    else:
-        peak = peak[len(peak) // 2]
-        width = signal.peak_widths(zdiff, [peak], rel_height = 0.5)[0][0]
-    fr_guess = f[peak]
-    width_spac = np.median(fdiff[1:] - fdiff[:-1]) * width
+    peak, width_spac = get_peak_fwhm(fdiff, zdiff)
+    fr_guess = fdiff[peak]
 
-    x = np.log(width_spac / fr_guess * Qr_guess)
+    x = np.log(width_spac / fr_guess * Qr)
     if x < -3.43:
         a_guess = 1
-    elif x > 0.3:
+    elif x > 0.17:
         a_guess = 1e-2
     else:
         poly = [-0.05591812, -0.27491759, -0.5516617, 0.10680838]
         a_guess = np.polyval(poly, x)
-    return a_guess
+    return a_guess, fr_guess
 
 def guess_phi_amp(z, z0):
     """
@@ -154,8 +93,8 @@ def guess_phi_amp(z, z0):
     z0 (complex): value of z off resonance
 
     Returns:
-    phi_guess (float): phi guess value
-    amp_guess (float): amplitude guess value
+    phi_guess (float): phi guess
+    amp_guess (float): amp guess
     """
     popt, _ = fitter.fit_iq_circle(z, plotq = False)
     xc, yc, R = popt
@@ -167,16 +106,3 @@ def guess_phi_amp(z, z0):
     phi_guess = np.arctan2(det, dot)
     amp_guess = 2 * R * np.abs(np.cos(phi_guess)) / np.abs(z0)
     return phi_guess, amp_guess
-
-def get_y_resonance(a):
-    """
-    Given a nonlinearity parameter a, returns the value of y at f = fr
-
-    Parameters:
-    a (float): nonlinearity parameter
-
-    Returns:
-    y (float): value of y at f = fr
-    """
-    y = cardan(4.0, 0, 1.0, a)
-    return y

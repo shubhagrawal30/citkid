@@ -3,13 +3,49 @@ from scipy import optimize
 from .funcs import nonlinear_iq_for_fitter, nonlinear_iq, circle_objective
 from .util import bounds_check, calculate_residuals
 from .plot import *
-import citkid.res.guess as guess 
+import citkid.res.guess as guess
+
+def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
+                               plotq = False, **kwargs):
+    """
+    Fits IQ data with gain amplitudes and phase correction from a gain scan.
+    Cuts resonance frequencies from the gain scan in spans of fr / Qr around fr,
+    where fr is an item in frs and Qr is a corresponding quality factor in Qrs
+
+    The optimal fine scan width is 6 * fr / Qr
+    The optimal gain scan width is 100 * fr / Qr
+
+    Parameters:
+    fgain (np.array): gain sweep frequency data
+    zgain (np.array): gain sweep complex S21 data
+    ffine (np.array): fine sweep frequency data
+    zfine (np.array): fine sweep complex S21 data
+    frs (list of float): resonance frequencies to cut from the gain scan
+    Qrs (list of float): Qrs to cut from the gain scan.
+    plotq (bool): If True, plots the fits.
+    **kwargs: other arguments for fit_nonlinear_iq
+
+    Returns:
+    """
+
+    p_amp, p_phase, z_rmvd, (fig_gain, axs_gain) = \
+        fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, frs, Qrs,
+                                  plotq = plotq)
+
+    p0, popt, popt_err, res, (fig_fit, axs_fit) = fit_nonlinear_iq(ffine,
+                                            zfine_rmvd, plotq = plotq, **kwargs)
+    fig, axs = combine_fit_figure(axs_gain, axs_fit)
+    return p, p_amp, p_phase, tau, res, fig_gain, fig_fine, fig_fit
 
 def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
-                     fit_tau = True, tau_guess = None):
-    """Fit a nonlinear IQ with from an S21 sweep. Uses scipy.optimize.curve_fit.
-       It is assumed that the system gain and phase are removed from the data
-       before fitting. i0, q0, and tau are fitted only for fine-tuning.
+                     fit_tau = True, tau_guess = None, plotq = False):
+    """
+    Fit a nonlinear IQ with from an S21 sweep. Uses scipy.optimize.curve_fit.
+    It is assumed that the system gain and phase are removed from the data
+    before fitting. i0, q0, and tau are fitted only for fine-tuning.
+
+    The optimal span of the data is 6 * fr / Qr
+    The optimal length of the data is 500, but down to 200 still works ok
 
     Parameters:
     f : numpy.array
@@ -32,22 +68,25 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     fit_tau (bool): if False, tau is enforced from p0[7] to speed up fitting.
         If True, tau is fit.
     tau_guess (float or None): If float, overides p0[7]
+    plotq (bool): if True, plots the data with the fit
 
     Returns:
     p0 (np.array): fit parameter guess.
     popt (np.array): fit parameters. See p0 parameter
     popt_err (np.array): standard errors on fit parameters
-    red_chi_sq (float): reduced chi squared
-    p_value (float): p value
+    res (float): fit residuals
+    fig, ax (pyplot figure and axes, or None): plot of data with fit, or None
+        if not plotq
     """
     # Sort f and z
     f, z = np.array(f), np.array(z)
     ix = np.argsort(f)
     f, z = f[ix], z[ix]
     if bounds is None:
-        # default bounds
-        bounds = ([np.min(f), 1e3, .01, -1, -1, 0, -1e2, -1e2, -1.0e-6],
-                  [np.max(f), 1e6,   1,  1, 1, 5,  1e2,  1e2,  1.0e-6])
+        # default bounds. Phi range is increased to avoid jumping at bounds
+        #                 fr,  Qr, amp,    phi,    a,   i0,   q0,     tau
+        bounds = ([np.min(f), 1e3, .01, -np.pi * 1.5, 0, -1e2, -1e2, -1.0e-6],
+                  [np.max(f), 1e7,   1,  np.pi * 1.5, 5,  1e2,  1e2,  1.0e-6])
     if p0 is None:
         # default initial guess
         p0 = guess.guess_p0_nonlinear_iq(f, z)
@@ -55,46 +94,39 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
         p0[0] = fr_guess
     if tau_guess is not None:
         p0[7] = tau_gues
-    # Rotate z data by phi
-    z0 = p0[5] + 1j * p0[6]
-    z = z0 * (1 - ((1 - z / z0) * np.exp(-1j * p0[3])))
-    phi_guess = p0[3]
-    p0[3] = 0
     # Stack z data
     z_stacked = np.hstack((np.real(z), np.imag(z)))
+    # Check bounds
     bounds = bounds_check(p0, bounds)
-
-
     # fit
     if not fit_tau:
         # Fit with tau enforced from p0[7]
+        tau = p0[7]
         del bounds[0][7]
         del bounds[1][7]
         del p0[7]
-        def fit_func(x_lamb, a, b, c, d, e, f, g, h):
-            return nonlinear_iq_for_fitter(x_lamb, a, b, c, d, e, f, g, h, tau)
+        def fit_func(x_lamb, a, b, c, d, e, f, g):
+            return nonlinear_iq_for_fitter(x_lamb, a, b, c, d, e, f, g, tau)
         popt, pcov = optimize.curve_fit(fit_func, f, z_stacked, p0,
-                                  bounds = bounds)#, maxfev = 1000 * (len(f) + 1))
+                                        bounds = bounds)
         popt = np.insert(popt, 7, tau)
-        # fill covariance matrix
-        cov = np.ones((pcov.shape[0] + 1, pcov.shape[1] + 1)) * -1
-        cov[0:7, 0:7] = pcov[0:7, 0:7]
-        cov[8, 8] = pcov[7, 7]
-        cov[8, 0:7] = pcov[7, 0:7]
-        cov[0:7, 8] = pcov[0:7, 7]
-        pcov = cov
+        popt_err = np.sqrt(np.diag(pcov))
+        popt_err = np.insert(popt_err, 7, 0)
     else:
         # Fit without enforcing tau
         popt, pcov = optimize.curve_fit(nonlinear_iq_for_fitter, f, z_stacked,
-                              p0, bounds = bounds)#, maxfev = 1000 * (len(f) + 1))
+                              p0, bounds = bounds)
 
-    popt_err = np.sqrt(np.diag(pcov))
+        popt_err = np.sqrt(np.diag(pcov))
     z_fit = nonlinear_iq(f, *popt)
     res = calculate_residuals(z, z_fit)
-    # Convert p0 and popt back to
-    p0[3] += phi_guess
-    popt[3] += phi_guess
-    return p0, popt, popt_err, res, bounds
+
+    # plot
+    if plotq:
+        figax = plot_nonlinear_iq(f, z, popt, p0)
+    else:
+        figax = None
+    return p0, popt, popt_err, res, figax
 
 def fit_iq_circle(z, plotq = False):
     """
@@ -110,7 +142,6 @@ def fit_iq_circle(z, plotq = False):
 
     Returns:
     popt (list): fit parameters (A, B, R).
-    popt_err (list): standard error on fit parameters -> not implemented yet
     fig, ax (pyplot figure and axis): fit figure and axis, or None if not plotq
     """
 
