@@ -1,9 +1,9 @@
 import numpy as np
 from scipy import optimize
-from .funcs import nonlinear_iq_for_fitter, nonlinear_iq
+from .funcs import nonlinear_iq_for_fitter, nonlinear_iq, circle_objective
 from .util import bounds_check, calculate_residuals
 from .plot import *
-from .guess import guess_p0_nonlinear_iq
+import citkid.res.guess as guess 
 
 def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
                      fit_tau = True, tau_guess = None):
@@ -50,7 +50,7 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
                   [np.max(f), 1e6,   1,  1, 1, 5,  1e2,  1e2,  1.0e-6])
     if p0 is None:
         # default initial guess
-        p0 = guess_p0_nonlinear_iq(f, z)
+        p0 = guess.guess_p0_nonlinear_iq(f, z)
     if fr_guess is not None:
         p0[0] = fr_guess
     if tau_guess is not None:
@@ -96,15 +96,15 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     popt[3] += phi_guess
     return p0, popt, popt_err, res, bounds
 
-def fit_iq_circle(f, z, plotq = False):
-    '''Fits an IQ loop to a circle. The function describing the circle is
+def fit_iq_circle(z, plotq = False):
+    """
+    Fits an IQ loop to a circle. The function describing the circle is
 
        [Re(S21)-A]^2 + [Im(S21)-B]^2 = R^2
 
        where the origin is (A, B) and the radius is R.
 
     Parameters:
-    f (np.array): frequency data
     z (np.array): complex S21 data
     plotq (bool): if True, plots the fit and data
 
@@ -112,15 +112,13 @@ def fit_iq_circle(f, z, plotq = False):
     popt (list): fit parameters (A, B, R).
     popt_err (list): standard error on fit parameters -> not implemented yet
     fig, ax (pyplot figure and axis): fit figure and axis, or None if not plotq
-    '''
-    def objective(params, x, y):
-        A, B, R = params
-        error = sum(((x-A)**2+(y-B)**2-R**2)**2)
-        return error
+    """
+
     I, Q = np.real(z), np.imag(z)
-    x0 = ((max(I)+min(I))/2, (max(Q)+min(Q))/2, (max(I)-min(I)+max(Q)-min(Q))/4)
+    x0 = [(max(I) + min(I))/2, (max(Q) + min(Q))/2]
+    x0.append((max(I) - min(I) + max(Q) - min(Q)) / 4)
     args = (I, Q)
-    popt = optimize.fmin(objective, x0, args, disp=0)
+    popt = optimize.fmin(circle_objective, x0, args, disp=0)
 
     if plotq:
         fig, ax = plot_circle(z, *popt)

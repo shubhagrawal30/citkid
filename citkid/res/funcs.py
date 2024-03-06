@@ -86,3 +86,21 @@ def nonlinear_iq_for_fitter(f, fr, Qr, amp, phi, a, i0, q0, tau):
     """
     z = nonlinear_iq(f, fr, Qr, amp, phi, a, i0, q0, tau)
     return np.hstack((np.real(z), np.imag(z)))
+
+@jit(nopython=True)
+def circle_objective(params, x, y):
+    """
+    Objective for circle fitting
+
+    Parameters:
+    params (A, B, R): circle fit parameters. (A, B) is the origin and R is the
+        radius
+    x (np.array): x data
+    y (np.array): y data
+
+    Returns:
+    error (float): error for minimization
+    """
+    A, B, R = params
+    error = sum(((x - A) ** 2+(y - B) ** 2 - R ** 2) ** 2)
+    return error

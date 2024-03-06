@@ -1,5 +1,5 @@
 import numpy as np
-# import citkid.res.fitter
+import citkid.res.fitter as fitter
 from scipy import signal
 from .util import cardan
 
@@ -18,7 +18,7 @@ def guess_p0_nonlinear_iq(f, z):
     """
     f, z = f.copy(), z.copy()
     # i0 and q0 guess
-    z0_guess = np.mean(np.concatenate([z[:5], z[-5:]]))
+    z0_guess = np.mean(np.concatenate([z[:2], z[-2:]]))
     i0_guess = np.real(z0_guess)
     q0_guess = np.imag(z0_guess)
 
@@ -28,10 +28,23 @@ def guess_p0_nonlinear_iq(f, z):
     # Guess a
     a_guess = guess_a_nl(f, z, Qr_guess)
 
-    # Next, with a good guess for fr, we can determine phi and amp really easily
-    yr = get_y_resonance(a)
-    # Left off here. Qr and a guesses are really good 
+    # Guess phi and amp
+    phi_guess, amp_guess = guess_phi_amp(z, z0_guess)
 
+    # Guess fr
+    fr_guess = np.mean(f)
+    # Package and return p0
+    p0 = [fr_guess, Qr_guess, amp_guess, phi_guess, a_guess, i0_guess, q0_guess]
+    return p0
+
+    # Next, with a good guess for fr, we can determine phi and amp really easily
+
+
+    # Left off here. Qr and a guesses are really good
+    #########################################################################################
+    # Code from submm
+
+    ##############################################################################################
     # guess f0 from largest spacing
     # largest spacing works better than distance from offres or min(S21)
     fdiff = np.mean([f[1:], f[:-1]], axis = 0)
@@ -65,9 +78,7 @@ def guess_p0_nonlinear_iq(f, z):
         poly = [4.91802646e-05, -3.47894107e-03, 8.56340493e-02, 3.73634664e-03]
         amp_guess = np.polyval(poly, depth)
 
-    p0 = [fr_guess, Qr_guess, amp_guess, phi_guess, a_guess, i0_guess, q0_guess,
-          tau_guess]
-    return p0
+
 
 def guess_Qr(f, z, z0):
     """
@@ -133,6 +144,29 @@ def guess_a_nl(f, z, Qr_guess):
         poly = [-0.05591812, -0.27491759, -0.5516617, 0.10680838]
         a_guess = np.polyval(poly, x)
     return a_guess
+
+def guess_phi_amp(z, z0):
+    """
+    Guess the impedance mismatch rotation and amplitude.
+
+    Parameters:
+    z (np.array): array of complex S21 data
+    z0 (complex): value of z off resonance
+
+    Returns:
+    phi_guess (float): phi guess value
+    amp_guess (float): amplitude guess value
+    """
+    popt, _ = fitter.fit_iq_circle(z, plotq = False)
+    xc, yc, R = popt
+    # angle between center of circle and off resonance point
+    x1, y1, = -np.real(z0), -np.imag(z0)
+    x2, y2 = xc + x1, yc + y1
+    dot = x1 * x2 + y1 * y2
+    det = x1 * y2 - y1 * x2
+    phi_guess = np.arctan2(det, dot)
+    amp_guess = 2 * R * np.abs(np.cos(phi_guess)) / np.abs(z0)
+    return phi_guess, amp_guess
 
 def get_y_resonance(a):
     """
