@@ -34,6 +34,12 @@ def bounds_check(p0, bounds):
     Returns:
     new_bounds (tuple): modified bounds
     """
+    # First, flip bounds if they are reversed
+    for i, b1, b2 in zip(range(len(bounds[0])), bounds[0], bounds[1]):
+        if b1 > b2:
+            bounds[0][i] = b2
+            bounds[1][i] = b1
+    # Make sure p0 is within bounds 
     lower_bounds = []
     upper_bounds = []
     for p, lb, ub in zip(p0, bounds[0], bounds[1]):

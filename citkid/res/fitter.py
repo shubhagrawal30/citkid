@@ -2,7 +2,9 @@ import numpy as np
 from scipy import optimize
 from .funcs import nonlinear_iq_for_fitter, nonlinear_iq, circle_objective
 from .util import bounds_check, calculate_residuals
-from .plot import *
+from .gain import fit_and_remove_gain_phase
+from .plot import plot_nonlinear_iq, plot_gain_fit, plot_circle
+from .plot import  combine_figures_vertically
 import citkid.res.guess as guess
 
 def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
@@ -26,16 +28,26 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
     **kwargs: other arguments for fit_nonlinear_iq
 
     Returns:
+    p_amp (np.array): 2nd-order polynomial fit parameters to dB
+    p_phase (np.array): 1st-order polynomial fit parameters to phase
+    p0 (np.array): fit parameter guess.
+    popt (np.array): fit parameters. See p0 parameter
+    popt_err (np.array): standard errors on fit parameters
+    res (float): fit residuals
+    fig (pyplot.figure or None): figure with gain fit and nonlinear IQ fit if
+        plotq, or None
     """
 
-    p_amp, p_phase, z_rmvd, (fig_gain, axs_gain) = \
+    p_amp, p_phase, zfine_rmvd, (fig_gain, axs_gain) = \
         fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, frs, Qrs,
                                   plotq = plotq)
-
     p0, popt, popt_err, res, (fig_fit, axs_fit) = fit_nonlinear_iq(ffine,
                                             zfine_rmvd, plotq = plotq, **kwargs)
-    fig, axs = combine_fit_figure(axs_gain, axs_fit)
-    return p, p_amp, p_phase, tau, res, fig_gain, fig_fine, fig_fit
+    if plotq:
+        fig = combine_figures_vertically(fig_gain, fig_fit)
+    else:
+        fig = None
+    return p_amp, p_phase, p0, popt, popt_err, res, fig
 
 def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
                      fit_tau = True, tau_guess = None, plotq = False):
@@ -75,21 +87,24 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     popt (np.array): fit parameters. See p0 parameter
     popt_err (np.array): standard errors on fit parameters
     res (float): fit residuals
-    fig, ax (pyplot figure and axes, or None): plot of data with fit, or None
-        if not plotq
+    fig, ax (pyplot figure and axes, or None): plot of data with fit if plotq,
+        or None, None
     """
     # Sort f and z
     f, z = np.array(f), np.array(z)
     ix = np.argsort(f)
     f, z = f[ix], z[ix]
+    if p0 is None: # default initial guess
+        p0 = guess.guess_p0_nonlinear_iq(f, z)
     if bounds is None:
         # default bounds. Phi range is increased to avoid jumping at bounds
         #                 fr,  Qr, amp,    phi,    a,   i0,   q0,     tau
         bounds = ([np.min(f), 1e3, .01, -np.pi * 1.5, 0, -1e2, -1e2, -1.0e-6],
                   [np.max(f), 1e7,   1,  np.pi * 1.5, 5,  1e2,  1e2,  1.0e-6])
-    if p0 is None:
-        # default initial guess
-        p0 = guess.guess_p0_nonlinear_iq(f, z)
+    for index in [1, 5, 6]: # For Qr and z0, the initial guess should be good
+        # These will be flipped in bounds_check if needed
+        bounds[0][index] = p0[index] / 10
+        bounds[1][index] = p0[index] * 10
     if fr_guess is not None:
         p0[0] = fr_guess
     if tau_guess is not None:
@@ -125,7 +140,7 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     if plotq:
         figax = plot_nonlinear_iq(f, z, popt, p0)
     else:
-        figax = None
+        figax = None, None
     return p0, popt, popt_err, res, figax
 
 def fit_iq_circle(z, plotq = False):

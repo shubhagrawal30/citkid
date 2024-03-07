@@ -34,6 +34,23 @@ def fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, frs = [], Qrs = [],
     z_rmvd = remove_gain(ffine, zfine, p_amp, p_phase)
     return p_amp, p_phase, z_rmvd, (fig_gain, axs_gain)
 
+def remove_gain(f, z, p_amp, p_phase):
+    """
+    Removes the gain amplitude and phase from data
+
+    Parameters:
+    f (np.array): frequency data in Hz
+    z (np.array): complex S21 data
+    p_amp (np.array): polynomial fit parameters to gain amplitude
+    p_phase (np.array): polynomial fit parameters to gain phase
+
+    Returns:
+    z_rmvd (np.array): complex S21 data with gain amplitude and phase removed
+    """
+    z_rmvd = z / 10 ** (np.polyval(p_amp, f) / 20)
+    z_rmvd = z_rmvd / np.exp(1j * np.polyval(p_phase, f))
+    return z_rmvd
+
 def fit_gain(f, z, fr_spans, plotq = False):
     """
     Fits the amplitude and phase of gain data. Amplitude is fit to a 2nd order
@@ -101,20 +118,3 @@ def fit_gain(f, z, fr_spans, plotq = False):
     else:
         fig, axs = None, None
     return p_amp, p_phase, (fig, axs)
-
-def remove_gain(f, z, p_amp, p_phase):
-    """
-    Removes the gain amplitude and phase from data
-
-    Parameters:
-    f (np.array): frequency data in Hz
-    z (np.array): complex S21 data
-    p_amp (np.array): polynomial fit parameters to gain amplitude
-    p_phase (np.array): polynomial fit parameters to gain phase
-
-    Returns:
-    z_rmvd (np.array): complex S21 data with gain amplitude and phase removed
-    """
-    z_rmvd = z / 10 ** (np.polyval(p_amp, f) / 20)
-    z_rmvd = z_rmvd / np.exp(1j * np.polyval(p_phase, f))
-    return z_rmvd

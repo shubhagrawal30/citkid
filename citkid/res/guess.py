@@ -27,8 +27,10 @@ def guess_p0_nonlinear_iq(f, z):
     phi_guess, amp_guess = guess_phi_amp(z, z0_guess)
     # guess Qr
     Qr_guess = guess_Qr(f, z, z0_guess, phi_guess)
-    # guess a and fr
-    a_guess, fr_guess = guess_a_fr(f, z, Qr_guess)
+    # guess a
+    a_guess = guess_a(f, z, Qr_guess)
+    # guess fr
+    fr_guess = guess_fr(f, z, z0_guess, phi_guess, a_guess, Qr_guess)
     # Package and return p0
     p0 = [fr_guess, Qr_guess, amp_guess, phi_guess, a_guess,
           i0_guess, q0_guess, tau_guess]
@@ -55,9 +57,9 @@ def guess_Qr(f, z, z0, phi):
     Qr_guess = np.exp(np.polyval(poly, np.log(fwhm)))
     return Qr_guess
 
-def guess_a_fr(f, z, Qr):
+def guess_a(f, z, Qr):
     """
-    Guesses the nonlinearity parameter and resonance frequency
+    Guesses the nonlinearity parameter
 
     Parameters:
     f (np.array): array of frequency data in Hz
@@ -66,15 +68,13 @@ def guess_a_fr(f, z, Qr):
 
     Returns:
     a_guess (float): nonlinearity parameter guess
-    fr_guess (float): resonance frequency guess
     """
-
     fdiff = np.mean([f[1:], f[:-1]], axis = 0)
-    zdiff = abs(np.diff(z))
+    zdiff = abs(z[1:] - z[:-1])
     peak, width_spac = get_peak_fwhm(fdiff, zdiff)
-    fr_guess = fdiff[peak]
+    fr = fdiff[peak]
 
-    x = np.log(width_spac / fr_guess * Qr)
+    x = np.log(width_spac / fr * Qr)
     if x < -3.43:
         a_guess = 1
     elif x > 0.17:
@@ -82,7 +82,33 @@ def guess_a_fr(f, z, Qr):
     else:
         poly = [-0.05591812, -0.27491759, -0.5516617, 0.10680838]
         a_guess = np.polyval(poly, x)
-    return a_guess, fr_guess
+    return a_guess
+
+def guess_fr(f, z, z0, phi, a, Qr):
+    """
+    Guess the resonance frequency
+
+    Parameters:
+    f (np.array): array of frequency data in Hz
+    z (np.array): array of complex S21 data
+    z0 (complex): z value off resonance
+    phi (float): impedance mismatch angle
+    a (float): nonlinearity parameter guess
+    Qr (float): guess for the total quality factor
+
+    Returns:
+    fr_guess (float): guess for the resonance frequency
+    """
+    z_rot = (1 - z / z0) * np.exp(-1j * phi)
+    fdiff = np.mean([f[1:], f[:-1]], axis = 0)
+    zdiff = abs(z_rot[1:] - z_rot[:-1])
+    ix = np.argmax(zdiff)
+    fr_guess = fdiff[ix]
+    # Modification from nonlinearity parameter and Q
+    poly = [-1.04607392,  0.9999992]
+    fr_guess /= np.polyval(poly, a / Qr)
+    return fr_guess
+
 
 def guess_phi_amp(z, z0):
     """
