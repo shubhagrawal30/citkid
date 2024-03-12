@@ -6,9 +6,11 @@ from .gain import fit_and_remove_gain_phase
 from .plot import plot_nonlinear_iq, plot_gain_fit, plot_circle
 from .plot import  combine_figures_vertically
 import citkid.res.guess as guess
+from .data_io import make_iq_fit_row
 
 def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
-                               plotq = False, **kwargs):
+                               plotq = False, return_dataframe = False,
+                               **kwargs):
     """
     Fits IQ data with gain amplitudes and phase correction from a gain scan.
     Cuts resonance frequencies from the gain scan in spans of fr / Qr around fr,
@@ -25,17 +27,22 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
     frs (list of float): resonance frequencies to cut from the gain scan
     Qrs (list of float): Qrs to cut from the gain scan.
     plotq (bool): If True, plots the fits.
+    return_dataframe (bool): if True, returns the output of
+        .data_io.make_iq_fit_row instead of the separated data
     **kwargs: other arguments for fit_nonlinear_iq
 
     Returns:
-    p_amp (np.array): 2nd-order polynomial fit parameters to dB
-    p_phase (np.array): 1st-order polynomial fit parameters to phase
-    p0 (np.array): fit parameter guess.
-    popt (np.array): fit parameters. See p0 parameter
-    popt_err (np.array): standard errors on fit parameters
-    res (float): fit residuals
-    fig (pyplot.figure or None): figure with gain fit and nonlinear IQ fit if
-        plotq, or None
+    if return_dataframe:
+        row (pd.Series): fit data as a pandas series
+    else:
+        p_amp (np.array): 2nd-order polynomial fit parameters to dB
+        p_phase (np.array): 1st-order polynomial fit parameters to phase
+        p0 (np.array): fit parameter guess.
+        popt (np.array): fit parameters. See p0 parameter
+        popt_err (np.array): standard errors on fit parameters
+        res (float): fit residuals
+        fig (pyplot.figure or None): figure with gain fit and nonlinear IQ
+            fit if plotq, or None
     """
 
     p_amp, p_phase, zfine_rmvd, (fig_gain, axs_gain) = \
@@ -47,6 +54,10 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
         fig = combine_figures_vertically(fig_gain, fig_fit)
     else:
         fig = None
+    if return_dataframe:
+        row = make_iq_fit_row(p_amp, p_phase, p0, popt, popt_err, res,
+                              plot_path = '', prefix = 'iq')
+        return row, fig
     return p_amp, p_phase, p0, popt, popt_err, res, fig
 
 def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
@@ -141,6 +152,7 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
         figax = plot_nonlinear_iq(f, z, popt, p0)
     else:
         figax = None, None
+    p0 = np.array(p0)
     return p0, popt, popt_err, res, figax
 
 def fit_iq_circle(z, plotq = False):

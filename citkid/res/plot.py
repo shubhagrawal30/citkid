@@ -19,7 +19,7 @@ def plot_nonlinear_iq(f, z, popt, p0, plot_guess = False):
     fig, ax (pyplot figure and axes): plot of data with fit, both in IQ space
         and as mag(S21)
     """
-    fig, axs = plt.subplots(1, 2, figsize = [6, 2.8], dpi = 200)
+    fig, axs = plt.subplots(1, 2, figsize = [6, 2.8], dpi = 200, layout = 'tight')
     axs[0].set_ylabel('Q')
     axs[0].set_xlabel('I')
     axs[1].set_ylabel(r'$S_{21}$ (dB)')
@@ -27,20 +27,21 @@ def plot_nonlinear_iq(f, z, popt, p0, plot_guess = False):
     axs[1].set_xlabel(f'(f - {round(f0 / 1e9, 4)} MHz) (kHz)')
     fig.tight_layout()
 
-    axs[0].plot(np.real(z), np.imag(z), '.', color = plt.cm.viridis(0),
+    color0 = plt.cm.viridis(0.1)
+    axs[0].plot(np.real(z), np.imag(z), '.', color = color0,
                 markersize = 5, label = 'data')
     axs[1].plot((f - f0) / 1e3, 20 * np.log10(abs(z)), '.',
-                color = plt.cm.viridis(0), markersize = 5)
+                color = color0, markersize = 5)
 
     fsamp = np.linspace(min(f), max(f), 1000)
     zsamp = nonlinear_iq(fsamp, *popt)
-    axs[0].plot(np.real(zsamp), np.imag(zsamp), '--k', label = 'fit')
-    axs[1].plot((fsamp - f0) / 1e3, 20 * np.log10(abs(zsamp)), '--k')
+    axs[0].plot(np.real(zsamp), np.imag(zsamp), '--r', label = 'fit')
+    axs[1].plot((fsamp - f0) / 1e3, 20 * np.log10(abs(zsamp)), '--r')
 
     if plot_guess:
         zsamp = nonlinear_iq(fsamp, *p0)
-        axs[0].plot(np.real(zsamp), np.imag(zsamp), '--r', label = 'guess')
-        axs[1].plot((fsamp - f0) / 1e3, 20 * np.log10(abs(zsamp)), '--r')
+        axs[0].plot(np.real(zsamp), np.imag(zsamp), '--k', label = 'guess')
+        axs[1].plot((fsamp - f0) / 1e3, 20 * np.log10(abs(zsamp)), '--k')
         axs[0].legend(framealpha = 1)
     return fig, axs
 
@@ -56,7 +57,7 @@ def plot_circle(z, A, B, R):
     Returns:
     fig, ax (pyplot figure and axis): data and fit plot
     """
-    fig, ax = plt.subplots(figsize = (4, 4), dpi = 300)
+    fig, ax = plt.subplots(figsize = (4, 4), dpi = 300, layout = 'tight')
     ax.plot(np.real(z), np.imag(z), 'r.')
     ax.set_aspect('equal', adjustable='datalim')
     cir = plt.Circle((A, B), R, color='k', fill=False, label='IQ loop fit')
@@ -81,24 +82,24 @@ def plot_gain_fit(f0, dB0, f, dB, phase, p_amp, p_phase):
     fig, axs (pyplot figure and axis): data and fit plot
     """
     fmean = np.mean(f0)
-    fig, axs = plt.subplots(1, 2, figsize=[6, 2.8], dpi = 200)
+    fig, axs = plt.subplots(1, 2, figsize=[6, 2.8], dpi = 200, layout = 'tight')
     axs[1].set_ylabel('Phase')
     axs[1].set_xlabel(f'(f - {round(fmean / 1e9, 4)} MHz) (kHz)')
     axs[0].set_ylabel('|S21| (dB)')
     axs[0].set_xlabel(f'(f - {round(fmean / 1e9, 4)} MHz) (kHz)')
 
-    color = plt.cm.viridis(0)
+    color = plt.cm.viridis(0.1)
     color0 = plt.cm.viridis(0.99)
     axs[0].plot((f0 - fmean) * 1e-3, dB0, '.', color = color0, label='Raw data')
     axs[0].plot((f - fmean) * 1e-3, dB, '.', color = color, label='Fitted data')
     fsamp = np.linspace(np.min(f0),np.max(f0), 100)
     if ~np.any(np.isnan(p_amp)):
-        axs[0].plot((fsamp - fmean) * 1e-3, np.polyval(p_amp, fsamp), '--k', label='Fit')
+        axs[0].plot((fsamp - fmean) * 1e-3, np.polyval(p_amp, fsamp), '--r', label='Fit')
 
     axs[1].plot([], [], '.', color = color0, label = 'Raw data')
     axs[1].plot((f - fmean) * 1e-3, phase, '.', color = color, label='Fitted data')
     if ~np.any(np.isnan(p_phase)):
-        axs[1].plot((fsamp - fmean) * 1e-3, np.polyval(p_phase, fsamp), '--k', label='Fit')
+        axs[1].plot((fsamp - fmean) * 1e-3, np.polyval(p_phase, fsamp), '--r', label='Fit')
 
     axs[1].legend(framealpha=1)
     fig.tight_layout()
@@ -141,7 +142,7 @@ def combine_figures_vertically(fig1, fig2):
     buf2 = save_figure_to_memory(fig2)
     plt.close(fig1)
     plt.close(fig2)
-    fig, axs = plt.subplots(2, 1, dpi = 200)
+    fig, axs = plt.subplots(2, 1, dpi = 200, layout = 'tight')
     for ax in axs:
         ax.set_axis_off()
     axs[0].imshow(plt.imread(buf1))
