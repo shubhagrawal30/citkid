@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 nonlinear_iq_p_names = ['fr', 'Qr', 'amp', 'phi', 'a', 'i0', 'q0', 'tau']
+nonlinear_iq_p_labels = [r'$f_r$', r'$Q_r$', r'$Q_r / Q_c$', r'$\phi$', r'$a$',
+                         r'$i_0$', r'$q_0$', r'$\tau$']
 
 def make_iq_fit_row(p_amp, p_phase, p0, popt, popt_err, res, plot_path = '',
                     prefix = 'iq'):
