@@ -21,14 +21,15 @@ def guess_p0_responsivity_int(power, x, guess_nfit = 3):
         e += ' Try a custom initial guess.'
         raise ValueError(e)
     poly = np.polyfit(np.sqrt(power[-guess_nfit:]), x[-guess_nfit:], 1)
-    c0 = poly[1]
-    if c0 < 0:
-        c0 = - np.median(x)
+    d0 = poly[1]
+    if d0 < 0:
+        d0 = - np.median(x)
         # It would be good to further explore this behavior. It seems to work,
         # but I don't understand why
-    P0 = (c0 / poly[0]) ** 2
-    R0 = - c0 / (2 * P0)
-    p0 = [R0 / 1e9, P0 * 1e16, c0 * 1e8]
+    P0 = (d0 / poly[0]) ** 2
+    R0 = - d0 / (2 * P0)
+    c0 = (d0 + 1) / (1 - 2 * R0 * P0)
+    p0 = [R0 / 1e9, P0 * 1e16, c0]
     bounds = get_bounds_responsivity_int(p0)
     return p0, bounds
 
@@ -42,8 +43,8 @@ def get_bounds_responsivity_int(p0):
     Returns:
     bounds (list): [lower_bounds, upper_bounds] corresponding to p0
     """
-    bounds = [[p0[0] * 1e3, p0[1] / 1e4, p0[2] / 1e2],
-              [p0[0] / 1e4, p0[1] * 1e4, p0[2] * 1e2]]
+    bounds = [[p0[0] * 1e3, p0[1] / 1e4, p0[2] * 0.9],
+              [p0[0] / 1e4, p0[1] * 1e4, p0[2] * 1.1]]
     # Flip bounds if they are reversed
     for i, pi in enumerate(p0):
         if bounds[0][i] > bounds[1][i]:
