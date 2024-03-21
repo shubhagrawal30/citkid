@@ -6,7 +6,7 @@ from .gain import fit_and_remove_gain_phase
 from .plot import plot_nonlinear_iq, plot_gain_fit, plot_circle
 from .plot import  combine_figures_vertically
 import citkid.res.guess as guess
-from .data_io import make_iq_fit_row
+from .data_io import make_fit_row
 
 def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
                                plotq = False, return_dataframe = False,
@@ -28,7 +28,7 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
     Qrs (list of float): Qrs to cut from the gain scan.
     plotq (bool): If True, plots the fits.
     return_dataframe (bool): if True, returns the output of
-        .data_io.make_iq_fit_row instead of the separated data
+        .data_io.make_fit_row instead of the separated data
     **kwargs: other arguments for fit_nonlinear_iq
 
     Returns:
@@ -39,7 +39,7 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
         p_phase (np.array): 1st-order polynomial fit parameters to phase
         p0 (np.array): fit parameter guess.
         popt (np.array): fit parameters. See p0 parameter
-        popt_err (np.array): standard errors on fit parameters
+        perr (np.array): standard errors on fit parameters
         res (float): fit residuals
         fig (pyplot.figure or None): figure with gain fit and nonlinear IQ
             fit if plotq, or None
@@ -48,17 +48,17 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
     p_amp, p_phase, zfine_rmvd, (fig_gain, axs_gain) = \
         fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, frs, Qrs,
                                   plotq = plotq)
-    p0, popt, popt_err, res, (fig_fit, axs_fit) = fit_nonlinear_iq(ffine,
+    p0, popt, perr, res, (fig_fit, axs_fit) = fit_nonlinear_iq(ffine,
                                             zfine_rmvd, plotq = plotq, **kwargs)
     if plotq:
         fig = combine_figures_vertically(fig_gain, fig_fit)
     else:
         fig = None
     if return_dataframe:
-        row = make_iq_fit_row(p_amp, p_phase, p0, popt, popt_err, res,
+        row = make_fit_row(p_amp, p_phase, p0, popt, perr, res,
                               plot_path = '', prefix = 'iq')
         return row, fig
-    return p_amp, p_phase, p0, popt, popt_err, res, fig
+    return p_amp, p_phase, p0, popt, perr, res, fig
 
 def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
                      fit_tau = True, tau_guess = None, plotq = False):
@@ -96,7 +96,7 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     Returns:
     p0 (np.array): fit parameter guess.
     popt (np.array): fit parameters. See p0 parameter
-    popt_err (np.array): standard errors on fit parameters
+    perr (np.array): standard errors on fit parameters
     res (float): fit residuals
     fig, ax (pyplot figure and axes, or None): plot of data with fit if plotq,
         or None, None
@@ -136,14 +136,14 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
         popt, pcov = optimize.curve_fit(fit_func, f, z_stacked, p0,
                                         bounds = bounds)
         popt = np.insert(popt, 7, tau)
-        popt_err = np.sqrt(np.diag(pcov))
-        popt_err = np.insert(popt_err, 7, 0)
+        perr = np.sqrt(np.diag(pcov))
+        perr = np.insert(perr, 7, 0)
     else:
         # Fit without enforcing tau
         popt, pcov = optimize.curve_fit(nonlinear_iq_for_fitter, f, z_stacked,
                               p0, bounds = bounds)
 
-        popt_err = np.sqrt(np.diag(pcov))
+        perr = np.sqrt(np.diag(pcov))
     z_fit = nonlinear_iq(f, *popt)
     res = calculate_residuals(z, z_fit)
 
@@ -153,7 +153,7 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     else:
         figax = None, None
     p0 = np.array(p0)
-    return p0, popt, popt_err, res, figax
+    return p0, popt, perr, res, figax
 
 def fit_iq_circle(z, plotq = False):
     """
