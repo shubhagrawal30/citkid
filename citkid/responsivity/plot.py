@@ -2,13 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from .funcs import responsivity_int
 
-def plot_responsivity_int(power, x, popt, p0):
+def plot_responsivity_int(power, x, x_err, popt, p0):
     """
     Plots the fit and initial guess to responsivity_int
 
     Parameters:
     power (array-like): array of blackbody powers in W
-    x (array-like): array of fractional frequency shifts in Hz / Hz.
+    x (array-like): array of fractional frequency shifts in Hz / Hz
+    x_err (None or array-like): error bars for the plot, or None to plot without
+        error bars
     p0 (list): initial guess parameters [R0_guess, P0_guess, c_guess]
     popt (list): fit parameters [R0, P0, c]
 
@@ -19,9 +21,14 @@ def plot_responsivity_int(power, x, popt, p0):
     ax.set_ylabel(r'$df / f$ (kHz / GHz)')
     ax.set_xlabel(r'Power (W)')
     ax.set_xscale('log')
-
-    ax.plot(power, x * 1e6, marker = '.', color = plt.cm.viridis(0),
-            linestyle = '', label = 'Data')
+    if x_err is None:
+        ax.plot(power, x * 1e6, marker = '.', color = plt.cm.viridis(0),
+                linestyle = '', label = 'Data')
+    else:
+        ax.errorbar(power, x * 1e6, yerr = x_err * 1e6, marker = '.',
+                    color = plt.cm.viridis(0), linestyle = '', label = 'Data')
+        # ax.plot(power, x * 1e6, marker = '.', color = 'b',
+        #         linestyle = '', label = 'Data')
 
     psamp = np.geomspace(min(power), max(power), 200)
     ysamp = responsivity_int(psamp, *popt)
