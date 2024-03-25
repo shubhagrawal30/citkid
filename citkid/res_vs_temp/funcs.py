@@ -9,8 +9,7 @@ hbar = h / (2*np.pi)
 N0_Al = 1.0737e47
 N0_Nb = 6.135e48
 
-
-def calculate_fr(temperature, fr0, D, alpha, Tc, gamma = 1):
+def fr_vs_temp(temperature, fr0, D, alpha, Tc, gamma = 1):
     """
     Calculates the resonance frequency at the given temperature, including
     the Mattis-Bardeen and TLS components of the temperature dependence
@@ -41,7 +40,7 @@ def calculate_fr(temperature, fr0, D, alpha, Tc, gamma = 1):
     fr = fr0 * (1 + D * g_tls + alpha * gamma * g_mb)
     return fr
 
-def calculate_Q(temperature, fr0, D, alpha, Tc, A, B, m, n, delta_z,
+def Q_vs_temp(temperature, fr0, D, alpha, Tc, A, B, m, n, delta_z,
                  gamma = 1, N0 = N0_Al):
     """
     Calculates the resonator quality factor at a given temperature, including

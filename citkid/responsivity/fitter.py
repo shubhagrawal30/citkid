@@ -17,12 +17,13 @@ def fit_responsivity_int(power, x, f1, x_err = None, guess = None,
     power (array-like): array of blackbody powers in W
     x (array-like): array of fractional frequency shifts in Hz / Hz. This must
         be scaled close to x(P = 0) = 0 for the initial guess to work well
-    x_err ()
+    x_err (array-like or None): If not None, x_err is the error on x used in the
+        fitting. If None, points are weighted equally
     f1 (float): frequency at P = 0 that was used to calculate x
     x_err (None or array-like): if not None, uncertainty on x for the fitter.
         if None, fits without uncertainty
-    guess (list or None): If not None, guess is used as the initial guess
-        [R0, P0, c]
+    guess (list or None): If not None, overwrites the initial guess
+        [R0_guess, P0_guess, c_guess]
     guess_nfit (int): number of high-power (P >> P_0) points in the data for the
         initial guess
     return_dataframe (bool): If True, returns a pandas series of the output data
@@ -37,10 +38,11 @@ def fit_responsivity_int(power, x, f1, x_err = None, guess = None,
     f0err (float): uncertainty in f0
     (fig, ax): pyplot figure and axis, or (None, None) if not plotq
     """
+    power, x = np.array(power), np.array(x)
     ix = np.argsort(power)
     power, x = power[ix], x[ix]
     if x_err is not None:
-        x_err = x_err[ix]
+        x_err = np.array(x_err)[ix]
     # Initial guess
     if guess is not None:
         p0 = guess
