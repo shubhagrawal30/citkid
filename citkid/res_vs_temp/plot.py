@@ -26,7 +26,7 @@ def plot_fr_vs_temp(temperature, fr, fr_err, popt, p0):
         ax.plot(temperature, fr * 1e-6, marker = '.', color = plt.cm.viridis(0),
                 linestyle = '', label = 'Data')
     else:
-        ax.errorbar(temperature, fr * 1e-6, yerr = fr_err * 1e3, marker = '.',
+        ax.errorbar(temperature, fr * 1e-6, yerr = fr_err * 1e-6, marker = '.',
                     color = plt.cm.viridis(0), linestyle = '', label = 'Data')
 
     xsamp = np.geomspace(min(temperature), max(temperature), 200)

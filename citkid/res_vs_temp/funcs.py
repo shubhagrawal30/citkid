@@ -89,7 +89,39 @@ def Q_vs_temp(temperature, fr0, D, alpha, Tc, A, B, m, n, delta_z,
 
     return 1 / (delta_tls + delta_qp + delta_z)
 
-def calculate_Q_mb(temperature, fr0, alpha, Tc, delta_z,
+################################################################################
+######################### Funcs without TLS component ##########################
+################################################################################
+def fr_vs_temp_notls(temperature, fr0, alpha, Tc, gamma = 1):
+    """
+    Calculates the resonance frequency at the given temperature, including
+    only the Mattis-Bardeen component of the temperature dependence. This model
+    does not accurately extract the low-temperature dependence of the data if
+    TLS behavior is present.
+
+    Parameters:
+    temperature (float or array-like): in K
+    fr0 (float): frequency at 0 K
+    alpha (float): kinetic inductance fraction
+    Tc (float): superconducting transition temperature in K
+    gamma (float): 1, 1/2, or 1/3 for thin-film, local, or anomalous limits.
+        This parameter should be enforced if fitting
+
+    Returns:
+    fr (float or array-like): resonance frequency(ies) at the
+        given temperature(s)
+    """
+    kT = k_B * temperature
+    Delta0 = 1.762 * k_B * Tc
+    zeta = Delta0 / kT
+    xi = h * fr0 / kT
+
+    g_mb = np.sqrt(2 * np.pi / zeta) + 2 * np.exp(-xi) * I_n(0, xi)
+    g_mb = - g_mb * np.exp(-zeta) / 4
+    fr = fr0 * (1 + alpha * gamma * g_mb)
+    return fr
+
+def Q_vs_temp_notls(temperature, fr0, alpha, Tc, delta_z,
                  gamma = 1, N0 = N0_Al):
     """
     Calculates the resonator quality factor at a given temperature, including
@@ -123,10 +155,35 @@ def calculate_Q_mb(temperature, fr0, alpha, Tc, delta_z,
     # T << Tc approximation of S1
     S1 = 2 / np.pi * np.sqrt(2 * Delta0 / (np.pi * kT)) * np.sinh(xi) * K_n(0, xi)
     delta_qp = alpha * gamma * S1 * nth / (2 * N0 * Delta0)
-
     return 1 / (delta_qp + delta_z)
+################################################################################
+######################## Funcs with only TLS component #########################
+################################################################################
+def fr_vs_temp_tls(temperature, fr0, D):
+    """
+    Calculates the resonance frequency at the given temperature, including
+    only the TLS component of the temperature dependence. This model works at
+    low temperatures where the Mattis-Bardeen component is negligible.
 
-def calculate_Q_tls(temperature, fr0, D, A, B, m, n, delta_z):
+    Parameters:
+    temperature (float or array-like): in K
+    fr0 (float): frequency at 0 K
+    D (float): D(P) = F delta(0), where F is the volumetric fraction of TLS
+        in the dielectric and delta(0) is the internal loss in the limit of
+        low temperature and power
+
+    Returns:
+    fr (float or array-like): resonance frequency(ies) at the
+        given temperature(s)
+    """
+    kT = k_B * temperature
+    xi = h * fr0 / kT
+
+    g_tls = np.real(digamma(1/2 + 1j * xi / np.pi) - np.log(xi / np.pi)) / np.pi
+    fr = fr0 * (1 + D * g_tls)
+    return fr
+
+def Q_vs_temp_tls(temperature, fr0, D, A, B, m, n, delta_z):
     """
     Calculates the resonator quality factor at a given temperature, including
     the Mattis-Bardeen and TLS components of the temperature dependence. Follows

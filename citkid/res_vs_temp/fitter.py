@@ -29,7 +29,6 @@ def fit_fr_vs_temp(temperature, fr, Tc_guess = 1.3, fr_err = None, guess = None,
    perr (list): fit parameter uncertainties [fr0_err, D_err, alpha_err, Tc_err]
    (fig, ax): pyplot figure and axis, or (None, None) if not plotq
    """
-   # raise Exception('Need to add plotting and data_io')
    temperature, fr = np.array(temperature), np.array(fr)
 
    ix = np.argsort(temperature)
@@ -47,7 +46,7 @@ def fit_fr_vs_temp(temperature, fr, Tc_guess = 1.3, fr_err = None, guess = None,
        sigma = None
        p00 = p0
    else:
-       sigma = fr_err * 1e6
+       sigma = fr_err
        try:
            p00, _ = curve_fit(fr_vs_temp, temperature, fr, sigma = None,
                               p0 = p0, bounds = bounds)
