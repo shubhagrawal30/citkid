@@ -17,17 +17,15 @@ def fr_vs_temp(temperature, fr0, D, alpha, Tc, gamma = 1):
     Parameters:
     temperature (float or array-like): in K
     fr0 (float): frequency at 0 K
-    D (float): D(P) = F delta(0), where F is the volumetric fraction of TLS
-        in the dielectric and delta(0) is the internal loss in the limit of
-        low temperature and power
+    D (float): fitting parameter. See TLS write-up for details
     alpha (float): kinetic inductance fraction
     Tc (float): superconducting transition temperature in K
     gamma (float): 1, 1/2, or 1/3 for thin-film, local, or anomalous limits.
         This parameter should be enforced if fitting
 
     Returns:
-    fr (float or array-like): resonance frequency(ies) at the
-        given temperature(s)
+    fr (float or array-like): resonance frequency(ies) at the given
+        temperature(s)
     """
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
@@ -44,16 +42,12 @@ def Q_vs_temp(temperature, fr0, D, alpha, Tc, A, B, m, n, delta_z,
                  gamma = 1, N0 = N0_Al):
     """
     Calculates the resonator quality factor at a given temperature, including
-    the Mattis-Bardeen and TLS components of the temperature dependence. Follows
-    the model from Basu Thakur 2017: "Characterizing Quality Factor of Niobium
-    Resonators Using a Markov Chain Monte Carlo Approach"
+    the Mattis-Bardeen and TLS components of the temperature dependence
 
     Parameters:
     temperature (float or array-like): in K
     fr0 (float): frequency at 0 K
-    D (float): D(P) = F delta(0), where F is the volumetric fraction of TLS
-        in the dielectric and delta(0) is the internal loss in the limit of
-        low temperature and power
+    D (float): fitting parameter. See TLS write-up for details
     alpha (float): kinetic inductance fraction
     Tc (float): superconducting transition temperature in K
     A (float): model parameter. Compared to Basu Thakur 2017, A -> P / A
@@ -67,8 +61,7 @@ def Q_vs_temp(temperature, fr0, D, alpha, Tc, A, B, m, n, delta_z,
         This parameter should be enforced if fitting
 
     Returns:
-    Qr (float or array-like): resonance quality factor(s) at the
-        given temperature(s)
+    Q (float or array-like): quality factor(s) at the given temperature(s)
     """
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
@@ -108,8 +101,8 @@ def fr_vs_temp_notls(temperature, fr0, alpha, Tc, gamma = 1):
         This parameter should be enforced if fitting
 
     Returns:
-    fr (float or array-like): resonance frequency(ies) at the
-        given temperature(s)
+    fr (float or array-like): resonance frequency(ies) at the given
+        temperature(s)
     """
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
@@ -124,10 +117,10 @@ def fr_vs_temp_notls(temperature, fr0, alpha, Tc, gamma = 1):
 def Q_vs_temp_notls(temperature, fr0, alpha, Tc, delta_z,
                  gamma = 1, N0 = N0_Al):
     """
-    Calculates the resonator quality factor at a given temperature, including
-    the Mattis-Bardeen and TLS components of the temperature dependence. Follows
-    the model from Basu Thakur 2017: "Characterizing Quality Factor of Niobium
-    Resonators Using a Markov Chain Monte Carlo Approach"
+    Calculates the quality factor at the given temperature, including
+    only the Mattis-Bardeen component of the temperature dependence. This model
+    does not accurately extract the low-temperature dependence of the data if
+    TLS behavior is present.
 
     Parameters:
     temperature (float or array-like): in K
@@ -141,8 +134,7 @@ def Q_vs_temp_notls(temperature, fr0, alpha, Tc, delta_z,
         This parameter should be enforced if fitting
 
     Returns:
-    Qr (float or array-like): resonance quality factor(s) at the
-        given temperature(s)
+    Q (float or array-like): quality factor(s) at the given temperature(s)
     """
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
@@ -156,6 +148,7 @@ def Q_vs_temp_notls(temperature, fr0, alpha, Tc, delta_z,
     S1 = 2 / np.pi * np.sqrt(2 * Delta0 / (np.pi * kT)) * np.sinh(xi) * K_n(0, xi)
     delta_qp = alpha * gamma * S1 * nth / (2 * N0 * Delta0)
     return 1 / (delta_qp + delta_z)
+
 ################################################################################
 ######################## Funcs with only TLS component #########################
 ################################################################################
@@ -168,13 +161,11 @@ def fr_vs_temp_tls(temperature, fr0, D):
     Parameters:
     temperature (float or array-like): in K
     fr0 (float): frequency at 0 K
-    D (float): D(P) = F delta(0), where F is the volumetric fraction of TLS
-        in the dielectric and delta(0) is the internal loss in the limit of
-        low temperature and power
+    D (float): fitting parameter. See TLS write-up for details
 
     Returns:
-    fr (float or array-like): resonance frequency(ies) at the
-        given temperature(s)
+    fr (float or array-like): resonance frequency(ies) at the given
+        temperature(s)
     """
     kT = k_B * temperature
     xi = h * fr0 / kT
@@ -185,17 +176,14 @@ def fr_vs_temp_tls(temperature, fr0, D):
 
 def Q_vs_temp_tls(temperature, fr0, D, A, B, m, n, delta_z):
     """
-    Calculates the resonator quality factor at a given temperature, including
-    the Mattis-Bardeen and TLS components of the temperature dependence. Follows
-    the model from Basu Thakur 2017: "Characterizing Quality Factor of Niobium
-    Resonators Using a Markov Chain Monte Carlo Approach"
+    Calculates the quality factor at the given temperature, including
+    only the TLS component of the temperature dependence. This model works at
+    low temperatures where the Mattis-Bardeen component is negligible.
 
     Parameters:
     temperature (float or array-like): in K
     fr0 (float): frequency at 0 K
-    D (float): D(P) = F delta(0), where F is the volumetric fraction of TLS
-        in the dielectric and delta(0) is the internal loss in the limit of
-        low temperature and power
+    D (float): fitting parameter. See TLS write-up for details
     A (float): model parameter. Compared to Basu Thakur 2017, A -> P / A
     B (float): model parameter
     m (float): model power parameter
@@ -203,8 +191,7 @@ def Q_vs_temp_tls(temperature, fr0, D, A, B, m, n, delta_z):
     delta_z (float): 1 / Q at T = 0
 
     Returns:
-    Qr (float or array-like): resonance quality factor(s) at the
-        given temperature(s)
+    Q (float or array-like): quality factor(s) at the given temperature(s)
     """
     kT = k_B * temperature
     xi = h * fr0 / kT
