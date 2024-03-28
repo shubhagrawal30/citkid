@@ -140,7 +140,7 @@ def separate_fit_row_fr_vs_temp_notls(row, prefix = 'fr_vs_temp_notls'):
     return p0, popt, perr, gamma, plot_path
 
 def make_fit_row_Q_vs_temp_notls(p0, popt, perr, gamma, N0, plot_path = '',
-                                 prefix = 'Q_vs_temp'):
+                                 prefix = 'Q_vs_temp_notls'):
     """
     Wraps the output of fit_Q_vs_temp_notls fitting into a pd.Series instance
 
@@ -152,7 +152,7 @@ def make_fit_row_Q_vs_temp_notls(p0, popt, perr, gamma, N0, plot_path = '',
     N0 (float): single-spin density of states at the Fermi Level
     plot_path (str): path to the saved plot, or empty string if it does not
         exists
-    prefix (str): prefix for the column names. default is 'Q_vs_temp'
+    prefix (str): prefix for the column names. default is 'Q_vs_temp_notls'
 
     Returns:
     row (pd.Series): pd.Series object that includes all of the input data
@@ -264,5 +264,4 @@ def separate_fit_row_fr_vs_temp_tls(row, prefix = 'fr_vs_temp_tls'):
         perr.append(row[prefix + key + '_err'])
     plot_path = row[prefix + 'plotpath']
     p0, popt, perr = np.array(p0), np.array(popt), np.array(perr)
-    gamma = row[prefix + 'gamma']
     return p0, popt, perr, plot_path

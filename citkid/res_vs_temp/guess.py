@@ -89,8 +89,8 @@ def get_bounds_fr_vs_temp_notls(p0):
     Returns:
     bounds (list): [lower_bounds, upper_bounds] for fitter corresponding to p0
     """
-    bounds = [[p0[0] * (1 - 1e-5), p0[2] / 3, p0[3] / 2],
-              [p0[0] * (1 + 1e-5), p0[2] * 3, p0[3] * 2]]
+    bounds = [[p0[0] * (1 - 1e-5), p0[1] / 3, p0[2] / 2],
+              [p0[0] * (1 + 1e-5), p0[1] * 3, p0[2] * 2]]
     return bounds
 
 def guess_p0_Q_vs_temp_notls(temperature, Q, fr0_guess, gamma, N0,
