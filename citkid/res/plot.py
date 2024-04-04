@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from .funcs import nonlinear_iq
-import warnings
 
 def plot_nonlinear_iq(f, z, popt, p0, plot_guess = False):
     """

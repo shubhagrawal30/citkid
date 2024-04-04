@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 from io import BytesIO
+import warnings
 
 def fix_path(path):
     """
@@ -93,7 +94,7 @@ def combine_figures_horizontally(fig1, fig2):
     buf2 = save_figure_to_memory(fig2)
     plt.close(fig1)
     plt.close(fig2)
-    fig, axs = plt.subplots(2, 1, dpi = 200, layout = 'tight')
+    fig, axs = plt.subplots(1, 2, dpi = 200, layout = 'tight')
     for ax in axs:
         ax.set_axis_off()
     axs[0].imshow(plt.imread(buf1))
