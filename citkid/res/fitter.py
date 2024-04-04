@@ -4,7 +4,7 @@ from .funcs import nonlinear_iq_for_fitter, nonlinear_iq, circle_objective
 from .util import bounds_check, calculate_residuals
 from .gain import fit_and_remove_gain_phase
 from .plot import plot_nonlinear_iq, plot_gain_fit, plot_circle
-from .plot import  combine_figures_vertically
+from ..util import  combine_figures_vertically
 import citkid.res.guess as guess
 from .data_io import make_fit_row
 

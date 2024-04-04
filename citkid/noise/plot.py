@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ..res.plot import plot_circle
 from .psd import bin_psd
+from ..util import combine_figures_horizontally
 
 def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
              theta_range, theta_fine, theta, poly):
@@ -34,9 +35,7 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
     ax.plot([], [], '-k', label = 'fit')
 
     if znoise is not None:
-        fig.set_size_inches((8, 4))
-        ax2 = fig.add_axes([0.5, 0, 0.4, 0.8])
-        ax.set_position([0, 0, 0.4, 0.8])
+        fig2, ax2 = plt.subplots(figsize = [4, 4], dpi = 200)
         ax2.set_ylabel('x (Hz / MHz)')
         ax2.set_xlabel('Phase')
         nevery = int(len(znoise) / 10000)
@@ -75,6 +74,7 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
 
     ax.plot([], [], '--k', label = 'cal range')
     ax.legend(loc = 'center')
+    fig = combine_figures_horizontally(fig, fig2)
     return fig
 
 def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise,
