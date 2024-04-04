@@ -1,11 +1,13 @@
 import numpy as np
 from ..res.fitter import fit_iq_circle
 from .plot import plot_cal, plot_timestream, plot_psd
-import pyfftw
+from .psd import *
+from .cosmic_rays import remove_cosmic_rays
 
-def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None, znoise_offres = None,
-                dt_offres = None, flag_crs =True, deglitch = 5, plot_calq = True,
-                plot_psdq = True, plot_timestreamq = True):
+def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
+                znoise_offres = None, dt_offres = None, flag_crs =True,
+                deglitch = 5, plot_calq = True, plot_psdq = True,
+                plot_timestreamq = True, **cr_kwargs):
     """
     Computes parallel and perpendicular noise PSDs, as well as Sxx
 
@@ -32,24 +34,38 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None, znoise_o
         figure
     plot_timestreamq (bool): If True, plots the timestream figure. Else, returns
         None for the figure
-    verbose (bool): If True, displays a progress bar while analyzing noise
+    **cr_kwargs: kwargs for cosmic ray removal
 
     Returns:
-    s_par (np.array): PSD of noise parallel to IQ loop
-    s_per (np.array): PSD of noise perpendicular to IQ loop
-    s_xx (np.array): PSD of fractional frequency noise
-    f (np.array): frequency array for all PSDs
-    theta (np.array): theta timestream with no cosmic ray removal or deglitching
-    theta_clean (np.array): theta timestream with cosmic rays removed
-    x_clean (np.array): fractional frequency timestream with cosmic rays removed
-    poly (np.array): polynomial fit results for x versus theta fit
-    theta_range (tuple): [lower, upper] range of theta over which the fit was
-        performed
-    cr_indices (list): values (int) are indices at which cosmic rays were found
-        and removed
-    fig_cal (plt.figure): plot of the IQ loop with noise balls and calibration
-    fig_psd (plt.figure): plot of the PSDs
-    fig_timestream (plt.figure): plot of the timestream data
+    psd_onres (tuple): on-resonance psd data, or None
+        f_psd (np.array): frequency array for PSDs
+        spar  (np.array): PSD of noise parallel to IQ loop
+        sper  (np.array): PSD of noise perpendicular to IQ loop
+        sxx   (np.array): PSD of fractional frequency noise
+    psd_offres (tuple): off-resonance psd data, or None
+        f_psd_offres (np.array): frequency array for PSDs
+        spar_offres  (np.array): PSD of noise parallel to IQ loop
+        sper_offres  (np.array): PSD of noise perpendicular to IQ loop
+    timestream_onres (tuple): on-resonance timestream data, or None
+        theta (np.array): theta timestream data, with no cosmic ray removal or
+            deglitching
+        x (np.array): fractional frequency shift timestream with cosmic rays
+            removed and deglitching
+    timestream_offres (tuple): off-resonance timestream data, or None
+        theta_offres (np.array): theta timestream data, with no cosmic ray
+            removal or deglitching
+    cr_indices (np.array): indices into theta where cosmic rays were found
+    theta_range (list): [lower, upper] range of theta over which x vs theta was
+        fit to calibrate x
+    poly (np.array): x vs theta polynomial fit parameters
+    xcal_data (tuple): x vs theta calibration data. Not cut to theta_range
+        x (np.array): fractional frequency shift data
+        theta (np.array): theta data
+    figs (tuple): plots
+        fig_cal (plt.figure): plot of the IQ loop with noise balls and
+            calibration
+        fig_psd (plt.figure): plot of the PSDs
+        fig_timestream (plt.figure): plot of the timestream data
     """
     # Prepare data
     ffine, zfine= np.array(ffine), np.array(zfine)
@@ -61,18 +77,24 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None, znoise_o
     # Extract theta and x
     if znoise_offres is not None:
         znoise_offres = np.array(znoise_offres)
-        theta_fine, theta_offres =\
-        calibrate_timestreams(origin, ffine, zfine, fnoise_offres, znoise_offres, dt_offres, deglitch, offres = True)
+        theta_fine, theta_offres, znoise_offres_clean =\
+        calibrate_timestreams(origin, ffine, zfine, fnoise_offres,
+                              znoise_offres, dt_offres, deglitch,
+                              flag_crs = False, offres = True)
 
-        spar_offres, sper_offres = get_par_per_psd(dt_offres, znoise_offres, origin)
+        spar_offres, sper_offres = get_par_per_psd(dt_offres,
+                                                   znoise_offres_clean, origin)
         f_psd_offres = np.fft.rfftfreq(len(znoise_offres), d = dt)
     else:
         theta_offres = None
         f_psd_offres, spar_offres, sper_offres = None, None, None
     if znoise is not None:
         znoise = np.array(znoise)
+
         theta_fine, theta, theta_range, poly, x, cr_indices, znoise_clean =\
-        calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt, deglitch, offres = False)
+        calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
+                              deglitch, flag_crs = flag_crs, offres = False,
+                              **cr_kwargs)
 
         sxx = get_psd(x, dt)
         spar, sper = get_par_per_psd(dt, znoise_clean, origin)
@@ -80,8 +102,6 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None, znoise_o
     else:
         theta, poly, x, cr_indices, theta_range = None, None, None, None, None
         f_psd, spar, sper, sxx = None, None, None, None
-    # Make PSDs
-
     # Plots
     if plot_calq:
         fig_cal = plot_cal(ffine, zfine, popt_circle, fnoise, znoise,
@@ -89,66 +109,36 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None, znoise_o
     else:
         fig_cal = None
     if plot_timestreamq:
-        fig_timestream = plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise)
+        fig_timestream = plot_timestream(dt, theta, dt_offres, theta_offres,
+                                         poly, x, fnoise, cr_indices)
     else:
         fig_timestream = None
     if plot_psdq:
-        fig_psd = plot_psd(f_psd, spar, sper, sxx, f_psd_offres, spar_offres, sper_offres)
-    return f_psd, spar, sper, sxx, f_psd_offres, spar_offres, sper_offres 
+        fig_psd = plot_psd(f_psd, spar, sper, sxx,
+                           f_psd_offres, spar_offres, sper_offres)
+    else:
+        fig_psd = None
+    psd_onres = (f_psd, spar, sper, sxx)
+    psd_offres = (f_psd_offres, spar_offres, sper_offres)
+    timestream_onres = (theta, x)
+    timestream_offres = (theta_offres)
+    xcal_data = (1 - ffine / fnoise, theta_fine)
+    figs = (fig_cal, fig_timestream, fig_psd)
+    return psd_onres, psd_offres, timestream_onres, timestream_offres,\
+           cr_indices, theta_range, poly, xcal_data, figs
 
-
-def get_par_per_psd(dt, znoise, origin):
-    """
-    Calculates the parallel and perpendicular power spectral densities of the
-    S21 noise
-
-    Parameters:
-    dt (float): noise sample time in s
-    znoise (np.array): S21 noise timestream
-    origin (complex): center of the IQ loop
-
-    Returns:
-    spar <np.array>: logarithmic parallel noise PSD
-    sper <np.array>: logarithmic perpendicular noise PSD
-    """
-    znoise_shift = znoise - origin
-    znoise_mean = np.mean(znoise_shift)
-    angle = np.arctan2(np.imag(znoise_mean), np.real(znoise_mean))
-    znoise_shift_rot = np.exp(-1j*angle)*znoise_shift
-    # After centering and rotating, the par/perp components
-    # to the IQ loop are the imaginary/real parts.
-    zpar = np.imag(znoise_shift_rot)
-    zper = np.real(znoise_shift_rot)
-
-    spar = 10 * np.log10(get_psd(zpar, dt))
-    sper = 10 * np.log10(get_psd(zper, dt))
-    return spar, sper
-
-def get_psd(x, dt):
-    """
-    Given a timeseries with a constant sample rate, calculates the power
-    spectral density.
-
-    Parameters:
-    x (np.array): timeseries data
-    dt (float): sample rate of timeseries
-
-    Returns:
-    psd (np.array): power spectral density
-    """
-    a = pyfftw.interfaces.numpy_fft.rfft(x)
-    psd = 2 * np.abs(a) ** 2 * dt / len(x)
-    return psd
+################################################################################
+##################### Timestream analysis function #############################
+################################################################################
 
 def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt, deglitch,
-                          offres = False):
+                          flag_crs, offres = False, **cr_kwargs):
     """
     Calculates theta and x timestreams given complex IQ noise timestreams.
     1) calculate theta of the sweep data an noise timestream
     2) flag and remove cosmic rays
-    3) deglitch data and perform polynomial fit to get x from theta, if not offres
-
-    May want to center this on the noise frequency, rather than the mean of the calibrated f data
+    3) deglitch data and perform polynomial fit to get x from theta, if not
+       offres
 
     Parameters:
     origin (complex): origin of the iq loop
@@ -157,8 +147,12 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt, deglitch,
     fnoise (float): noise tone frequency in Hz
     znoise (np.array): complex noise timestream
     dt (float): timestream sample time
-    deglitch (float or None): deglitching threshold, or None to bypass deglitching
+    deglitch (float or None): deglitching threshold, or None to bypass
+        deglitching
+    flag_crs (bool): If True, flags cosmic rays and returns a list of indices
+        where they were found. If False, does not flag cosmic rays
     offres (bool): if True, only calibrates theta and bypasses x calibration
+    **cr_kwargs: kwargs for cosmic ray removal
 
     Returns:
     theta_fine (np.array): theta of the complex sweep data
@@ -171,22 +165,25 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt, deglitch,
     cr_indices (np.array): cosmic ray indices
     """
     theta_fine, theta = calculate_theta(zfine, znoise, origin)
+    znoise_clean = deglitch_timestream(znoise, deglitch)
     if offres:
-        return theta_fine, theta
+        return theta_fine, theta, znoise_clean
     # Remove cosmic rays from theta timestream
-    print('Need to implement cosmic ray removal')
-    cr_indices = np.array([])
-    theta_rmvd = theta
+    if flag_crs:
+        cr_indices, theta_rmvd = remove_cosmic_rays(theta, dt, **cr_kwargs)
+    else:
+        cr_indices = np.array([], dtype = np.int64)
+        theta_rmvd = theta.copy()
     # Calibrate x
     theta_deglitch, poly, theta_range = \
-        calibrate_x(ffine, theta_fine, theta, deglitch = deglitch)
+        calibrate_x(ffine, theta_fine, theta_rmvd, deglitch = deglitch)
 
     fs_deglitch = np.polyval(poly, theta_deglitch)
     x = 1 - fs_deglitch / fnoise
-    znoise_clean = deglitch_timestream(znoise, deglitch)
     return theta_fine, theta, theta_range, poly, x, cr_indices, znoise_clean
 
-def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3, min_cal_points = 5):
+def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3,
+                min_cal_points = 5):
     """
     Fit fine scan frequency to phase
 
@@ -239,15 +236,18 @@ def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3, min_cal
 
 def deglitch_timestream(x, deglitch):
     """
-    Replaces points above a certain threshold from data with the mean of the data
+    Replaces points above a certain threshold from data with the mean of the
+    data
 
     Parameters:
     x (np.array): data from which glitches are removed
-    deglitch (float): threshold for glitch removal. points above this threshold
-        times the standard deviation of the data are removed
+    deglitch (float or None): threshold for glitch removal. points above this
+        threshold times the standard deviation of the data are removed
     Returns:
     x_deglitch (np.array): data with glitches removed
     """
+    if deglitch is None:
+        return x
     x_mean = np.mean(x)
     x_deglitch = x.copy()
 

@@ -1,0 +1,121 @@
+from scipy.signal import find_peaks
+import numpy as np
+
+def remove_cosmic_rays(theta, dt, cr_nstd = 5, cr_width = 12,
+                       cr_peak_spacing = 100e-6, cr_removal_time = 1e-3):
+    """
+    Remove cosmic rays from a timestream. Flags the cosmic rays and sets the
+    data in the timestream equal to the average before and after the cosmic ray.
+
+    Parameters:
+    theta (np.array): theta array from which cosmic rays are removed
+    dt (float): sample time of theta array
+    cr_nstd (float): number of standard deviations above the mean for find_peaks
+    cr_width (int): width of cosmic rays in number of points
+    cr_peak_spacing (float): number of seconds spacing between cosmic rays
+    cr_removal_time (float): number of seconds to remove around each peak
+
+    Returns:
+    cr_indices (np.array): array of indices at which cosmic rays were found
+    theta_rmvd (np.array): theta array with cosmic rays removed
+    """
+    height = np.mean(-theta) + cr_nstd * np.std(theta)
+    cr_indices, _ = find_peaks(-theta, width = cr_width,
+                               distance = int(cr_peak_spacing / dt),
+                               height = height)
+    start_offset = int(200e-6 / dt)
+    istarts = cr_indices - start_offset
+    i_removal = int(cr_removal_time / dt)
+    iends = istarts + i_removal
+    iranges = [[istarts[i], iends[i]] for i in range(len(istarts))]
+    # Merge overlapping iranges
+    iranges = remove_overlaps(iranges)
+    # fix iranges on edge of data
+    for index, ir in enumerate(iranges):
+        if ir[0] < 0:
+            iranges[index][0] = 0
+        if ir[1] >= len(theta):
+            iranges[index][1] = len(theta) - 1
+    # Average data before and after iranges
+    theta_rmvd = theta.copy()
+    for irange in iranges:
+        # determine indices of data before and after the data to cut
+        ilen = irange[1] - irange[0]
+        ibef = [irange[0] - ilen - 1, irange[0] - 1]
+        iaft = [irange[1], irange[1] + ilen]
+        if ibef[0] < 0:
+            ibef[0] = 0
+        if iaft[1] > len(theta):
+            iaft[1] = len(theta)
+        # Make theta_bef and theta_aft arrays
+        theta_bef = theta[ibef[0]: ibef[1]]
+        theta_aft = theta[iaft[0]: iaft[1]]
+        length_diff = len(theta_aft) - len(theta_bef)
+        if length_diff > 0: # data before is too short
+            theta_bef = np.concatenate([theta_bef, theta_aft[:length_diff]])
+        elif length_diff < 0: # data before is too short
+            theta_aft = np.concatenate([theta_aft, theta_bef[:-length_diff]])
+        theta_rmvd[irange[0]: irange[1]] = np.mean([theta_bef, theta_aft],
+                                                    axis = 0)
+    return cr_indices, theta_rmvd
+
+################################################################################
+######################### Utility functions ####################################
+################################################################################
+
+def remove_overlaps(iranges):
+    """
+    Given a list of index ranges, return a list where overlapping ranges are
+    concatenated. Overlaps are defined by clearances between ranges equal to
+    the lengths of the ranges
+
+    Parameter:
+    iranges (list): values (list) are [lower, upper] values
+
+    Returns:
+    iranges_concat (list): iranges where overlapping ranges are concatenated
+    """
+    overlaps = find_overlaps(iranges)
+    if not len(overlaps):
+        return iranges
+    # Remove overlaps
+    iranges_concat = []
+    i = 0
+    while i < len(iranges):
+        if i in overlaps:
+            iranges_concat.append([min(iranges[i] + iranges[i + 1]),
+                                   max(iranges[i] + iranges[i + 1])])
+            ix = [overlap - 1 for overlap in overlaps]
+            i += 2
+        else:
+            iranges_concat.append(iranges[i])
+            i += 1
+    # Repeat until done
+    return remove_overlaps(iranges_concat)
+
+def find_overlaps(iranges):
+    """
+    Find overlapping ranges, where overlaps are defined by a clearance between
+    ranges equal to the max length of the two ranges
+
+    Parameters:
+    iranges (list): values (list) are [lower, upper] values
+
+    Returns:
+    overlaps (list): values (int) are indices of overlapping ranges, where the
+        two ranges that overlap are iranges[overlaps[i]] and
+        iranges[overlaps[i + 1]]
+    """
+    sorted_ranges = sorted(iranges, key = lambda x: x[0])
+    range_lens = [0] + [ir[1] - ir[0] for ir in iranges] + [0]
+    range_lens = [ir[1] - ir[0] for ir in iranges]
+    required_clearances = list(np.max([range_lens[:-1], range_lens[1:]],
+                               axis = 0))
+    actual_clearances = []
+    for i in range(len(iranges) - 1):
+        actual_clearances.append(iranges[i + 1][0] - iranges[i][1])
+    overlaps = []
+    for i in range(len(actual_clearances)):
+        if actual_clearances[i] <= required_clearances[i]:
+            overlaps.append(i)
+    return overlaps

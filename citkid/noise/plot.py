@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from ..res.plot import plot_circle
+from .psd import bin_psd
 
 def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
              theta_range, theta_fine, theta, poly):
@@ -25,6 +26,8 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
     Returns:
     fig (plt.figure): calibration plot figure
     """
+    color0 = plt.cm.viridis(0)
+    color1 = plt.cm.viridis(0.9)
     fig, ax = plot_circle(zfine, *popt_circle)
     origin = popt_circle[0] + 1j * popt_circle[1]
     ax.plot([], [], '.r', label = 'data')
@@ -39,41 +42,43 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
         nevery = int(len(znoise) / 10000)
         if nevery == 0:
             nevery = 1
-        ax.plot(np.real(znoise[::nevery]), np.imag(znoise[::nevery]), '.b',
-                markersize = 1, label = 'on-res noise')
+        ax.plot(np.real(znoise[::nevery]), np.imag(znoise[::nevery]), '.',
+                color = color0, markersize = 1, label = 'on-res noise')
         zn_med = np.mean(znoise - origin)
         r1 = zn_med * np.exp(1j * max(theta_range)) + origin
         r2 = zn_med * np.exp(1j * min(theta_range)) + origin
         ax.plot([np.real(origin), np.real(r1)],
-                [np.imag(origin), np.imag(r1)], '--b')
+                [np.imag(origin), np.imag(r1)], '--', color = color0)
         ax.plot([np.real(origin), np.real(r2)],
-                [np.imag(origin), np.imag(r2)], '--b')
+                [np.imag(origin), np.imag(r2)], '--', color = color0)
         # theta -> x calibration
-        ax2.plot(theta[::nevery],
-                 (1 - np.polyval(poly, theta[::nevery]) / fnoise) * 1e6, '.b',
-                 markersize = 5)
-        ix = (theta_fine < max(theta_range) + np.pi / 8)
-        ix = ix & (theta_fine > min(theta_range) - np.pi / 8)
+        ix = (theta_fine < max(theta) + np.pi / 8)
+        ix = ix & (theta_fine > min(theta) - np.pi / 8)
         theta_samp = np.linspace(min(theta_fine[ix]), max(theta_fine[ix]), 200)
         ax2.plot(theta_samp, (1 - np.polyval(poly, theta_samp) / fnoise) * 1e6,
                  '-k')
-        ax2.plot(theta_fine[ix], (1 - ffine[ix] / fnoise) * 1e6, '.r')
-        ax2.axvline(theta_range[0], linestyle = '--', color = 'b')
-        ax2.axvline(theta_range[1], linestyle = '--', color = 'b')
+        ax2.plot(theta_fine[ix], (1 - ffine[ix] / fnoise) * 1e6, '.',
+                  color = 'r')
+        ax2.plot(theta[::nevery],
+                 (1 - np.polyval(poly, theta[::nevery]) / fnoise) * 1e6, '.',
+                  color = color0, markersize = 5)
+        ax2.axvline(theta_range[0], linestyle = '--', color = color0)
+        ax2.axvline(theta_range[1], linestyle = '--', color = color0)
 
     if znoise_offres is not None:
         nevery = int(len(znoise_offres) / 10000)
         if nevery == 0:
             nevery = 1
         ax.plot(np.real(znoise_offres[::nevery]),
-                np.imag(znoise_offres[::nevery]), '.g', markersize = 1,
-                label = 'off-res noise')
+                np.imag(znoise_offres[::nevery]), '.', markersize = 1,
+                color = color1, label = 'off-res noise')
 
     ax.plot([], [], '--k', label = 'cal range')
     ax.legend(loc = 'center')
     return fig
 
-def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise):
+def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise,
+                    cr_indices):
     """
     Plots noise timestreams. If theta is None, plots only the off-resonance
     theta timestream. If theta_offres is None, plots only the on-resonance
@@ -89,10 +94,13 @@ def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise):
     poly (np.array): polynomial fit to x versus theta
     x (np.array): on-resonance x timestream data
     fnoise (float): on-resonance noise tone frequency in Hz
+    cr_indices (np.array): cosmic ray indices
 
     Returns:
     fig (plt.figure): timestream plot
     """
+    color0 = plt.cm.viridis(0)
+    color1 = plt.cm.viridis(0.9)
     fig = None
     nplots = 0
     if theta is not None:
@@ -108,38 +116,70 @@ def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise):
         axs[0].set_ylabel('x (Hz / kHz)\non-res')
         axs[1].set_ylabel('Phase\non-res')
 
-        time = np.arange(0, len(theta) * dt, dt)
-        axs[1].plot(time, theta, 'k')
+        time = np.linspace(0, len(theta) * dt, len(theta))
+        axs[1].plot(time, theta, color = color0)
         x_raw = 1 - np.polyval(poly, theta) / fnoise
-        axs[0].plot(time, x_raw * 1e3, 'k', label = 'raw data')
-        axs[0].plot(time, x * 1e3, 'r', label = 'deglitched data')
+        axs[0].plot(time, x_raw * 1e3, color = color0, label = 'raw data')
+        axs[0].plot(time, x * 1e3, color = color1, label = 'deglitched data')
+        axs[0].plot(time[cr_indices], x_raw[cr_indices] * 1e3, color = 'r',
+                    marker = 'x', linestyle = '', label = 'removed peaks')
         axs[0].legend(loc = 'lower left')
     if theta_offres is not None:
         i = nplots - 1
         axs[i].set_ylabel('Phase\noff-res')
         axs[i].set_xlabel('Time (s)')
-        time = np.arange(0, len(theta_offres) * dt_offres, dt_offres)
-        axs[i].plot(time, theta_offres, 'k')
+        time = np.linspace(0, len(theta_offres) * dt_offres, len(theta_offres))
+        axs[i].plot(time, theta_offres, color = color0)
     return fig
 
 def plot_psd(f_psd, spar, sper, sxx, f_psd_offres, spar_offres, sper_offres):
+    """
+    Plots on- and off-resonance psds. Produces one plot of perpendicular and
+    parallel noise, and one plot of Sxx, if provided
+
+    Parameters:
+    f_psd (np.array or None): on-resonance frequency data in Hz
+    spar  (np.array or None): on-resonance parallel noise in dBc
+    sper  (np.array or None): on-resonance perpendicular noise in dBc
+    sxx   (np.array or None): on-resonance Sxx in 1 / Hz
+    f_psd_offres (np.array or None): off-resonance frequency data in Hz
+    spar_offres  (np.array or None): off-resonance parallel noise in dBc
+    sper_offres  (np.array or None): off-resonance perpendicular noise in dBc
+
+    Returns:
+    fig (plt.figure): plot of the PSDs
+    """
+    parcolor = plt.cm.viridis(0)
+    percolor = plt.cm.viridis(0.9)
     if sxx is None:
-        fig, ax0 = plt.subplots(figsize = [6, 2.5], dpi = 200)
+        fig, ax0 = plt.subplots(figsize = [6, 3], dpi = 200)
+        axs = [ax0]
     else:
-        fig, [ax1, ax0] = plt.subplots(2, 1, figsize = [6, 5], sharex = True,
+        fig, [ax1, ax0] = plt.subplots(2, 1, figsize = [6, 6], sharex = True,
                                        dpi = 200)
         ax1.set_ylabel(r'$S_{xx}$ (1 / Hz)')
         ax1.set_yscale('log')
-    for ax in (ax0, ax1):
+        axs = [ax0, ax1]
+    for ax in axs:
         ax.set_xscale('log')
+        ax.grid()
     ax0.set_xlabel('Frequency (Hz)')
     ax0.set_ylabel(r'PSD (dBc)')
     # Need to bin before plotting
     if spar_offres is not None:
-        ax0.plot(f_psd_offres[1:], spar_offres[1:], '--r', label = 'par off')
-        ax0.plot(f_psd_offres[1:], sper_offres[1:], '--b', label = 'per off')
+        fbin, sparbin, sperbin = bin_psd(f_psd_offres, [f_psd_offres,
+                                         spar_offres, sper_offres], nbins = 500,
+                                         fmin = f_psd_offres[1] * 10,
+                                         filter_pt_n = 55)
+        ax0.plot(fbin, sparbin, '--', color = parcolor, label = 'par off')
+        ax0.plot(fbin, sperbin, '--', color = percolor, label = 'per off')
     if spar is not None:
-        ax0.plot(f_psd[1:], spar[1:], '-r', label = 'par on')
-        ax0.plot(f_psd[1:], sper[1:], '-b', label = 'per on')
+        fbin, sparbin, sperbin, sxxbin = bin_psd(f_psd, [f_psd, spar,
+                                                        sper, sxx], nbins = 500,
+                                                 fmin = f_psd[1] * 10,
+                                                 filter_pt_n = 55)
+        ax0.plot(fbin, sparbin, '-', color = parcolor, label = 'par on')
+        ax0.plot(fbin, sperbin, '-', color = percolor, label = 'per on')
+        ax1.plot(fbin, sxxbin, '-', color = parcolor)
     ax0.legend()
     return fig
