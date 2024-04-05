@@ -210,29 +210,31 @@ def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3,
 
     ix0 = np.argmin(abs(min(theta_deglitch) - theta_fine))
     ix1 = np.argmin(abs(max(theta_deglitch) - theta_fine))
+    if ix1 < ix0:
+        ix0, ix1 = ix1, ix0 
+    
     if theta_fine[ix0] > min(theta_deglitch):
-        ix0 -= np.sign(ix1 - ix0)
+        ix0 -= 1
     if theta_fine[ix1] < max(theta_deglitch):
-        ix1 += np.sign(ix1 - ix0)
-    if ix0 > ix1:
-        ix0, ix1 = ix1, ix0
-    npoints_missing = min_cal_points + 1 - (ix1 - ix0)
+        ix1 += 1
+    ix1 += 1 # ix1 is not inclusive 
+    npoints_missing = min_cal_points - (ix1 - ix0)
     if npoints_missing > 0:
         half = int(np.ceil(npoints_missing / 2))
         ix0 -= half
-        ix1 + half
+        ix1 += half
     if len(theta_fine) < min_cal_points:
-        raise Exception('theta_fine must be at least 5 points long')
+        raise Exception(f'theta_fine must be at least min_cal_points = {min_cal_points} points long')
     if ix0 < 0:
-        ix1 -= ix0
+        ix1 += - ix0 # Increase ix1 by the amount below 0 
         ix0 = 0
-    if ix1 > len(theta_fine):
-        ix0 -= len(theta_fine) - ix1
+    if ix1 >= len(theta_fine):
+        ix0 += ix1 - len(theta_fine) # increase ix2 by the amount above len(theta_fine)
         ix1 = len(theta_fine)
     # Fit to data in range
-    poly = np.polyfit(theta_fine[ix0:ix1 + 1], ffine[ix0:ix1 + 1],
+    poly = np.polyfit(theta_fine[ix0:ix1], ffine[ix0:ix1],
                       deg = poly_deg)
-    theta_range = np.array([theta_fine[ix0], theta_fine[ix1]])
+    theta_range = np.array([theta_fine[ix0], theta_fine[ix1 - 1]])
 
     return theta_deglitch, poly, theta_range
 
