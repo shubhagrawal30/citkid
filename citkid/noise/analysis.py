@@ -77,28 +77,29 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     # Extract theta and x
     if znoise_offres is not None:
         znoise_offres = np.array(znoise_offres)
-        theta_fine, theta_offres, znoise_offres_clean =\
+        theta_fine, theta_offres, theta_offres_clean, A_offres_clean =\
         calibrate_timestreams(origin, ffine, zfine, fnoise_offres,
                               znoise_offres, dt_offres, deglitch,
                               flag_crs = False, offres = True)
 
-        spar_offres, sper_offres = get_par_per_psd(dt_offres,
-                                                   znoise_offres_clean, origin)
-        f_psd_offres = np.fft.rfftfreq(len(znoise_offres), d = dt)
+        spar_offres = 10 * np.log10(get_psd(theta_offres_clean, dt_offres))
+        sper_offres = 10 * np.log10(get_psd(A_offres_clean, dt_offres))
+        f_psd_offres = np.fft.rfftfreq(len(theta_offres_clean), d = dt_offres)
     else:
         theta_offres = None
         f_psd_offres, spar_offres, sper_offres = None, None, None
     if znoise is not None:
         znoise = np.array(znoise)
 
-        theta_fine, theta, theta_range, poly, x, cr_indices, znoise_clean =\
+        theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices =\
         calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
                               deglitch, flag_crs = flag_crs, offres = False,
                               **cr_kwargs)
 
         sxx = get_psd(x, dt)
-        spar, sper = get_par_per_psd(dt, znoise_clean, origin)
-        f_psd = np.fft.rfftfreq(len(znoise_clean), d = dt)
+        spar = 10 * np.log10(get_psd(theta_clean, dt))
+        sper = 10 * np.log10(get_psd(A_clean, dt))
+        f_psd = np.fft.rfftfreq(len(theta_clean), d = dt)
     else:
         theta, poly, x, cr_indices, theta_range = None, None, None, None, None
         f_psd, spar, sper, sxx = None, None, None, None
@@ -164,23 +165,24 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt, deglitch,
     x (np.array): deglitched x timestream
     cr_indices (np.array): cosmic ray indices
     """
-    theta_fine, theta = calculate_theta(zfine, znoise, origin)
-    znoise_clean = deglitch_timestream(znoise, deglitch)
+    theta_fine, theta, A = calculate_theta_A(zfine, znoise, origin)
     if offres:
-        return theta_fine, theta, znoise_clean
+        znoise_clean = deglitch_timestream(znoise, deglitch)
+        theta_fine, theta_clean, A_clean = calculate_theta_A(zfine, znoise_clean, origin)
+        return theta_fine, theta, theta_clean, A_clean
     # Remove cosmic rays from theta timestream
     if flag_crs:
-        cr_indices, theta_rmvd = remove_cosmic_rays(theta, dt, **cr_kwargs)
+        cr_indices, theta_rmvd, A_clean = remove_cosmic_rays(theta, A, dt, **cr_kwargs)
     else:
         cr_indices = np.array([], dtype = np.int64)
         theta_rmvd = theta.copy()
     # Calibrate x
-    theta_deglitch, poly, theta_range = \
+    theta_clean, poly, theta_range = \
         calibrate_x(ffine, theta_fine, theta_rmvd, deglitch = deglitch)
 
-    fs_deglitch = np.polyval(poly, theta_deglitch)
+    fs_deglitch = np.polyval(poly, theta_clean)
     x = 1 - fs_deglitch / fnoise
-    return theta_fine, theta, theta_range, poly, x, cr_indices, znoise_clean
+    return theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices
 
 def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3,
                 min_cal_points = 5):
@@ -256,7 +258,7 @@ def deglitch_timestream(x, deglitch):
     x_deglitch[devs > deglitch * x_std] = x_mean
     return x_deglitch
 
-def calculate_theta(zfine, znoise, origin):
+def calculate_theta_A(zfine, znoise, origin):
     """
     Convert an IQ loop and timestream to theta using the origin of the circle
 
@@ -268,6 +270,7 @@ def calculate_theta(zfine, znoise, origin):
     Returns:
     theta_fine (np.array): values of theta corresponding to the fine scan data
     theta_noise (np.array): theta timestream corresponding the the noise data
+    A_noise (np.array): amplitude timestream corresponding to the noise data
     """
     zn_mean = np.mean(znoise)
     # Get x, y basic vectors, where x is the vector that passes through the
@@ -292,8 +295,9 @@ def calculate_theta(zfine, znoise, origin):
                                        np.imag(znoise - origin)]))
     noise_z = np.dot(noise_vec, x_vec) + 1j * np.dot(noise_vec, y_vec)
     theta_noise = np.angle(noise_z)
+    A_noise = np.abs(noise_z)
     # Make sure the range of theta matches the range of the fine scan
     theta_noise = np.where(theta_noise > 1, theta_noise - 2 * np.pi,
                            theta_noise)
 
-    return theta_fine, theta_noise
+    return theta_fine, theta_noise, A_noise

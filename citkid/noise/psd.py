@@ -18,33 +18,6 @@ def get_psd(x, dt):
     psd = 2 * np.abs(a) ** 2 * dt / len(x)
     return psd
 
-def get_par_per_psd(dt, znoise, origin):
-    """
-    Calculates the parallel and perpendicular power spectral densities of the
-    S21 noise
-
-    Parameters:
-    dt (float): noise sample time in s
-    znoise (np.array): S21 noise timestream
-    origin (complex): center of the IQ loop
-
-    Returns:
-    spar <np.array>: logarithmic parallel noise PSD
-    sper <np.array>: logarithmic perpendicular noise PSD
-    """
-    znoise_shift = znoise - origin
-    znoise_mean = np.mean(znoise_shift)
-    angle = np.arctan2(np.imag(znoise_mean), np.real(znoise_mean))
-    znoise_shift_rot = np.exp(-1j*angle)*znoise_shift
-    # After centering and rotating, the par/perp components
-    # to the IQ loop are the imaginary/real parts.
-    zpar = np.imag(znoise_shift_rot)
-    zper = np.real(znoise_shift_rot)
-
-    spar = 10 * np.log10(get_psd(zpar, dt))
-    sper = 10 * np.log10(get_psd(zper, dt))
-    return spar, sper
-
 ################################################################################
 ############################ Binning and filtering #############################
 ################################################################################
