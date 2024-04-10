@@ -5,7 +5,7 @@ from .psd import *
 from .cosmic_rays import remove_cosmic_rays
 
 def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
-                znoise_offres = None, dt_offres = None, flag_crs =True,
+                znoise_offres = None, dt_offres = None, flag_crs = True,
                 deglitch = 5, plot_calq = True, plot_psdq = True,
                 plot_timestreamq = True, **cr_kwargs):
     """
@@ -176,6 +176,7 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt, deglitch,
     else:
         cr_indices = np.array([], dtype = np.int64)
         theta_rmvd = theta.copy()
+        A_clean = A.copy()
     # Calibrate x
     theta_clean, poly, theta_range = \
         calibrate_x(ffine, theta_fine, theta_rmvd, deglitch = deglitch)
