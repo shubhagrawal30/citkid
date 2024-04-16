@@ -32,6 +32,7 @@ class RFSOC:
         udp_ip (str): IP address for noise streaming
         noiseq (bool): If False, doesn't set up noise streaming
         """
+        # Import functions from primecam_readout
         local_primecam_path = fix_path(local_primecam_path)
         sys.path.insert(1,
             os.path.abspath(os.path.expanduser(local_primecam_path + 'src/')))
@@ -40,10 +41,15 @@ class RFSOC:
         from queen import alcoveCommand
         from alcove_commands.tones import genPhis
         from alcove import comNumFromStr
+        self.comNumFromStr = comNumFromStr 
+        self.alcoveCommand = alcoveCommand 
+        self.genPhis = genPhis
+        # Set system variables 
         self.bid = bid
         self.drid = drid
         self.tmp_directory = fix_path(tmp_directory)
         self.out_directory = fix_path(out_directory)
+        # Bind socket for noise
         if noiseq:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.bind((udp_ip, 4096))
@@ -57,11 +63,11 @@ class RFSOC:
         frequency (float): in MHz. 1 MHz resolution
         """
         self.lo_freq = frequency
-        com_num = comNumFromStr('setNCLO')
+        com_num = self.comNumFromStr('setNCLO')
         args = str(int(round(frequency, 0)))
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
 
     def write_vna_comb(self):
@@ -69,11 +75,11 @@ class RFSOC:
         Writes a rough vna comb of 1000 tones with a 500 MHz bandwidth centered
         on the LO frequency
         """
-        com_num = comNumFromStr('writeNewVnaComb')
+        com_num = self.comNumFromStr('writeNewVnaComb')
         args = None
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
 
     def write_targ_comb_from_vna(self, f_filename = False, a_filename = False,
@@ -91,11 +97,11 @@ class RFSOC:
         for filename in [f_filename, a_filename, p_filename]:
             if filename and not filename[-4:] == '.npy':
                 raise ValueError(f'filename must end in .npy')
-        com_num = comNumFromStr('writeTargCombFromVnaSweep')
+        com_num = self.comNumFromStr('writeTargCombFromVnaSweep')
         args = None
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
         for s, filename in zip(['f_res_targ', 'a_res_targ', 'p_res_targ'],
                                [f_filename, a_filename, p_filename]):
@@ -123,11 +129,11 @@ class RFSOC:
         for filename in [f_filename, a_filename, p_filename]:
             if filename and not filename[-4:] == '.npy':
                 raise ValueError(f'filename must end in .npy')
-        com_num = comNumFromStr('writeTargCombFromTargSweep')
+        com_num = self.comNumFromStr('writeTargCombFromTargSweep')
         args = None
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
         for s, filename in zip(['f_res_targ', 'a_res_targ', 'p_res_targ'],
                                [f_filename, a_filename, p_filename]):
@@ -157,11 +163,11 @@ class RFSOC:
         self.fres = np.load(self.tmp_directory + 'custom_freqs.npy')
         self.ares = np.load(self.tmp_directory + 'custom_amps.npy')
         self.pres = np.load(self.tmp_directory + 'custom_phis.npy')
-        com_num = comNumFromStr('writeTargCombFromCustomList')
+        com_num = self.comNumFromStr('writeTargCombFromCustomList')
         args = None
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
 
     def vna_sweep(self, filename, npoints = 500, N_accums = 5):
@@ -177,14 +183,15 @@ class RFSOC:
         """
         if filename and not filename[-4:] == '.npy':
             raise ValueError(f'filename must end in .npy')
-        com_num = comNumFromStr('vnaSweep')
+        com_num = self.comNumFromStr('vnaSweep')
         args = f"N_steps={npoints}, N_accums={N_accums}"
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
         if filename:
             self.transfer_file('s21_vna', filename)
+            separate_iq_data(self.out_directory + filename)
 
     def target_sweep(self, filename, npoints = 500, bandwidth = 0.2, N_accums = 5):
         """
@@ -200,14 +207,15 @@ class RFSOC:
         """
         if filename and not filename[-4:] == '.npy':
             raise ValueError(f'filename must end in .npy')
-        com_num = comNumFromStr('targetSweep')
+        com_num = self.comNumFromStr('targetSweep')
         args = f"N_steps={npoints},chan_bandwidth={bandwidth},N_accums={N_accums}"
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
         if filename:
             self.transfer_file('s21_targ', filename)
+            separate_iq_data(self.out_directory + filename)
 
     def capture_noise(self, seconds):
         """
@@ -256,11 +264,11 @@ class RFSOC:
         """
         if filename and not filename[-4:] == '.npy':
             raise ValueError(f'filename must end in .npy')
-        com_num = comNumFromStr('fineVnaResonators')
+        com_num = self.comNumFromStr('fineVnaResonators')
         args = None
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
         file, _ = self.get_recent_file('f_res_vna')
         self.fres = np.load(file)
@@ -282,11 +290,11 @@ class RFSOC:
         for filename in [f_filename, a_filename, p_filename]:
             if filename and not filename[-4:] == '.npy':
                 raise ValueError(f'filename must end in .npy')
-        com_num = comNumFromStr('findTargResonators')
+        com_num = self.comNumFromStr('findTargResonators')
         args = None
 
         with hidePrints():
-            response = alcoveCommand(com_num, bid = self.bid, drid = self.drid,
+            response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
                                      all_boards=False, args=args)
         for s, filename in zip(['f_res_targ', 'a_res_targ', 'p_res_targ'],
                                [f_filename, a_filename, p_filename]):
@@ -394,37 +402,31 @@ class RFSOC:
         pres (np.array or None): Array of custom phis, or None to auto generate
             random phis. Checks to ensure that the waveform doesn't saturate
         """
-        fres, ares, pres = make_custom_tone_lists(fres, ares, pres)
+        amp_max = (2 ** 15 - 1)
+        fres = np.array(fres)
+        if ares is None:
+            N = len(fres)
+            ares = np.ones(N) * amp_max / np.sqrt(N) * 0.25
+        if pres is None:
+            pres = genPhis(fres * 1e-6, ares)
         for file, res in zip(['custom_freqs.npy', 'custom_amps.npy',
                               'custom_phis.npy'],
                              [fres, ares, pres]):
             np.save(self.tmp_directory + file, res)
         self.transfer_custom_tone_lists()
-
-def make_custom_tone_lists(fres, ares, pres):
+    
+def separate_iq_data(path):
     """
-    Makes custom frequency, amplitude, and phase tone lists.
-
+    Given a path to IQ data saved by the RFSoC as complex f, z,
+    split the data into float f, i, q and save it 
+    
     Parameters:
-    fres (np.array): Array of custom frequencies in Hz
-    ares (np.array or None): Array of custom powers, or None to auto generate
-        equal powers at the maximum amplitude
-    pres (np.array or None): Array of custom phis, or None to auto generate
-        random phis. Checks to ensure that the waveform doesn't saturate
-
-    Returns:
-    fres (np.array): frequencies in Hz
-    ares (np.array): amplitudes
-    pres (np.array): phases
-    """
-    amp_max = (2 ** 15 - 1)
-    fres = np.array(fres)
-    if ares is None:
-        N = len(fres)
-        ares = np.ones(N) * amp_max / np.sqrt(N) * 0.25
-    if pres is None:
-        pres = genPhis(fres * 1e-6, ares)
-    return fres, ares, pres
+    path (str): path to the saved data 
+    """ 
+    f, z = np.load(path)
+    f = np.real(f)
+    i, q = np.real(z), np.imag(z) 
+    np.save(path, [f, i, q])
 
 class hidePrints:
     """
