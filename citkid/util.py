@@ -34,8 +34,12 @@ def save_fig(fig, filename, plot_directory, ftype = 'png'):
         fig.set_facecolor('white')
         fig.tight_layout()
         plt.figure(fig.number)
-        plt.savefig(plot_directory + filename + '.' + ftype,
-                    bbox_inches='tight', pad_inches = 0.05)
+        try:
+            plt.savefig(plot_directory + filename + '.' + ftype,
+                        bbox_inches='tight', pad_inches = 0.05)
+        except Exception as e:
+            plt.savefig(plot_directory + filename + '.' + ftype,
+                        pad_inches = 0.05)
         plt.close(fig)
 
 def save_figure_to_memory(fig):

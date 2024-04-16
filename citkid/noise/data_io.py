@@ -99,7 +99,7 @@ def save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
     iq_fit_row['xcalPath'] = path
     if xcal_data[0] is not None:
         np.save(path, xcal_data)
-    for fig, name in zip(figs, ['cal', 'psd', 'timestream']):
+    for fig, name in zip(figs, ['cal', 'timestream', 'psd']):
         if fig is not None:
             path = plot_directory + prefix + name + '.png'
             save_fig(fig, prefix + name, plot_directory, ftype = 'png')

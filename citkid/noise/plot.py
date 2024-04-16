@@ -74,7 +74,8 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
 
     ax.plot([], [], '--k', label = 'cal range')
     ax.legend(loc = 'center')
-    fig = combine_figures_horizontally(fig, fig2)
+    if znoise is not None:
+        fig = combine_figures_horizontally(fig, fig2)
     return fig
 
 def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise,
@@ -107,14 +108,14 @@ def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise,
         nplots += 2
     if theta_offres is not None:
         nplots += 1
-    if nplots > 1:
-        fig, axs = plt.subplots(nplots, 1, figsize = [8, nplots * 2],
-                                layout = 'tight', dpi = 200)
+    fig, axs = plt.subplots(nplots, 1, figsize = [8, nplots * 2],
+                            layout = 'tight', dpi = 200) 
     if nplots == 1:
         axs = [axs]
     if theta is not None:
         axs[0].set_ylabel('x (Hz / kHz)\non-res')
         axs[1].set_ylabel('Phase\non-res')
+        axs[1].set_xlabel('Time (s)')
 
         time = np.linspace(0, len(theta) * dt, len(theta))
         axs[1].plot(time, theta, color = color0)

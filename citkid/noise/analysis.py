@@ -72,8 +72,12 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     ix = np.argsort(ffine)
     ffine, zfine = ffine[ix], zfine[ix]
     # Fit circle
-    popt_circle, _ = fit_iq_circle(zfine, plotq = False)
-    origin = popt_circle[0] + 1j * popt_circle[1]
+    if znoise is None:
+        origin = 0 
+        popt_circle = [np.nan, np.nan, np.nan]
+    else:
+        popt_circle, _ = fit_iq_circle(zfine, plotq = False)
+        origin = popt_circle[0] + 1j * popt_circle[1]
     # Extract theta and x
     if znoise_offres is not None:
         znoise_offres = np.array(znoise_offres)
@@ -119,11 +123,14 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                            f_psd_offres, spar_offres, sper_offres)
     else:
         fig_psd = None
-    psd_onres = (f_psd, spar, sper, sxx)
-    psd_offres = (f_psd_offres, spar_offres, sper_offres)
-    timestream_onres = (theta, x)
-    timestream_offres = (theta_offres)
-    xcal_data = (1 - ffine / fnoise, theta_fine)
+    psd_onres = [f_psd, spar, sper, sxx]
+    psd_offres = [f_psd_offres, spar_offres, sper_offres]
+    timestream_onres = [theta, x]
+    timestream_offres = [theta_offres]
+    if fnoise is not None:
+        xcal_data = (1 - ffine / fnoise, theta_fine)
+    else:
+        xcal_data = [None]
     figs = (fig_cal, fig_timestream, fig_psd)
     return psd_onres, psd_offres, timestream_onres, timestream_offres,\
            cr_indices, theta_range, poly, xcal_data, figs
