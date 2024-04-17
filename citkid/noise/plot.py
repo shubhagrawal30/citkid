@@ -78,7 +78,7 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
         fig = combine_figures_horizontally(fig, fig2)
     return fig
 
-def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise,
+def plot_timestream(dt, theta, theta_clean, dt_offres, theta_offres, x,
                     cr_indices):
     """
     Plots noise timestreams. If theta is None, plots only the off-resonance
@@ -90,11 +90,11 @@ def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise,
     Parameters:
     dt (float or None): on-resonance timestream sample time in s
     theta (np.array or None): on-resonance theta timestream data
+    theta_clean (np.array or None): on-resonance theta timestream data with
+        cosmic rays removed and deglitched
     dt_offres (float or None): off-resonance timestream sample time in s
     theta_offres (np.array or None): off-resonance theta timestream data
-    poly (np.array): polynomial fit to x versus theta
     x (np.array): on-resonance x timestream data
-    fnoise (float): on-resonance noise tone frequency in Hz
     cr_indices (np.array): cosmic ray indices
 
     Returns:
@@ -109,22 +109,21 @@ def plot_timestream(dt, theta, dt_offres, theta_offres, poly, x, fnoise,
     if theta_offres is not None:
         nplots += 1
     fig, axs = plt.subplots(nplots, 1, figsize = [8, nplots * 2],
-                            layout = 'tight', dpi = 200) 
+                            layout = 'tight', dpi = 200)
     if nplots == 1:
         axs = [axs]
     if theta is not None:
-        axs[0].set_ylabel('x (Hz / kHz)\non-res')
+        axs[0].set_ylabel('x (Hz / MHz)\non-res')
         axs[1].set_ylabel('Phase\non-res')
         axs[1].set_xlabel('Time (s)')
 
         time = np.linspace(0, len(theta) * dt, len(theta))
-        axs[1].plot(time, theta, color = color0)
-        x_raw = 1 - np.polyval(poly, theta) / fnoise
-        axs[0].plot(time, x_raw * 1e3, color = color0, label = 'raw data')
-        axs[0].plot(time, x * 1e3, color = color1, label = 'deglitched data')
-        axs[0].plot(time[cr_indices], x_raw[cr_indices] * 1e3, color = 'r',
+        axs[1].plot(time, theta, color = color0, label = 'raw data')
+        axs[1].plot(time, theta_clean, color = color1, label = 'deglitched data')
+        axs[0].plot(time, x * 1e6, color = color0)
+        axs[1].plot(time[cr_indices], theta[cr_indices], color = 'r',
                     marker = 'x', linestyle = '', label = 'removed peaks')
-        axs[0].legend(loc = 'lower left')
+        axs[1].legend(loc = 'lower left')
     if theta_offres is not None:
         i = nplots - 1
         axs[i].set_ylabel('Phase\noff-res')

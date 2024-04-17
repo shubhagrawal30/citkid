@@ -1,5 +1,5 @@
 import numpy as np
-def update_all_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
+def update_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
                     cut_other_resonators = False, fres = None, Qres = None):
     """
     Give a multitone rough sweep dataset, return the updated resonance
@@ -14,7 +14,7 @@ def update_all_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
     method (str): 'mins21' to update using the minimum of |S21|. 'spacing' to
         update using the maximum spacing between adjacent IQ points. 'distance'
         to update using the point of furthest distance from the off-resonance
-        point
+        point. 'none' to return the center of each sweep.
     cut_other_resonators (bool): if True, cuts other resonators out of each
         sweep before updating the tone. Other resonators are defined using
         fres and Qres
@@ -27,18 +27,24 @@ def update_all_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
     Returns:
     fres (np.array): array of updated frequencies in Hz
     """
-    if method == 'mins21':
-        update = update_single_fres_mins21
+    if method == 'none':
+        fres = []
+        for i in range(len(f) // npoints):
+            i0, i1 = npoints * i, npoints * (i + 1)
+            fi = f[i0:i1]
+            fres.append(np.mean(fi))
+        return np.array(fres)
+    elif method == 'mins21':
+        update = update_fr_mins21
     elif method == 'spacing':
-        update = update_single_fres_spacing
+        update = update_fr_spacing
     elif method == 'distance':
-        update = update_single_fres_distance
+        update = update_fr_distance
     else:
         raise ValueError("method must be 'mins21', 'distance', or 'spacing'")
     fres = []
     for i in range(len(f) // npoints):
-        i0 = npoints * i
-        i1 = npoints * (i + 1)
+        i0, i1 = npoints * i, npoints * (i + 1)
         fi, zi = f[i0:i1], z[i0:i1]
         if i not in fcal_indices:
             if cut_other_resonators:
@@ -49,7 +55,7 @@ def update_all_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
             fres.append(np.mean(fi))
     return np.array(fres)
 
-def update_single_fres_minS21(fi, zi):
+def update_fr_minS21(fi, zi):
     """
     Give a single resonator rough sweep dataset, return the updated resonance
     frequency by finding the minimum of |S21| with a linear fit subtracted
@@ -67,7 +73,7 @@ def update_single_fres_minS21(fi, zi):
     fr = fi[ix]
     return fr
 
-def update_single_fres_spacing(fi, zi):
+def update_fr_spacing(fi, zi):
     """
     Give a single resonator rough sweep dataset, return the updated resonance
     frequency by finding the max spacing between adjacent IQ points
@@ -87,7 +93,7 @@ def update_single_fres_spacing(fi, zi):
     fr = fi[ix]
     return fr
 
-def update_single_fres_distance(fi, zi):
+def update_fr_distance(fi, zi):
     """
     Give a single resonator rough sweep dataset, return the updated resonance
     frequency by finding the furthest point from the off-resonance data

@@ -73,7 +73,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     ffine, zfine = ffine[ix], zfine[ix]
     # Fit circle
     if znoise is None:
-        origin = 0 
+        origin = 0
         popt_circle = [np.nan, np.nan, np.nan]
     else:
         popt_circle, _ = fit_iq_circle(zfine, plotq = False)
@@ -114,8 +114,8 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     else:
         fig_cal = None
     if plot_timestreamq:
-        fig_timestream = plot_timestream(dt, theta, dt_offres, theta_offres,
-                                         poly, x, fnoise, cr_indices)
+        fig_timestream = plot_timestream(dt, theta, theta_clean, dt_offres,
+                                         theta_offres, x, cr_indices)
     else:
         fig_timestream = None
     if plot_psdq:
@@ -219,13 +219,13 @@ def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3,
     ix0 = np.argmin(abs(min(theta_deglitch) - theta_fine))
     ix1 = np.argmin(abs(max(theta_deglitch) - theta_fine))
     if ix1 < ix0:
-        ix0, ix1 = ix1, ix0 
-    
+        ix0, ix1 = ix1, ix0
+
     if theta_fine[ix0] > min(theta_deglitch):
         ix0 -= 1
     if theta_fine[ix1] < max(theta_deglitch):
         ix1 += 1
-    ix1 += 1 # ix1 is not inclusive 
+    ix1 += 1 # ix1 is not inclusive
     npoints_missing = min_cal_points - (ix1 - ix0)
     if npoints_missing > 0:
         half = int(np.ceil(npoints_missing / 2))
@@ -234,7 +234,7 @@ def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3,
     if len(theta_fine) < min_cal_points:
         raise Exception(f'theta_fine must be at least min_cal_points = {min_cal_points} points long')
     if ix0 < 0:
-        ix1 += - ix0 # Increase ix1 by the amount below 0 
+        ix1 += - ix0 # Increase ix1 by the amount below 0
         ix0 = 0
     if ix1 >= len(theta_fine):
         ix0 += ix1 - len(theta_fine) # increase ix2 by the amount above len(theta_fine)
