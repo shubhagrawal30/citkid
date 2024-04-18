@@ -24,7 +24,11 @@ def import_iq_noise(directory, file_suffix, import_noiseq = True):
     """
     if file_suffix != '':
         file_suffix = '_' + file_suffix
-    fres_initial = np.load(directory + f'fres_initial{file_suffix}.npy')
+    path = directory + f'fres_initial{file_suffix}.npy'
+    if os.path.exists(path):
+        fres_initial = np.load(path)
+    else:
+        fres_initial = None
     fres = np.load(directory + f'fres{file_suffix}.npy')
     ares = np.load(directory + f'ares{file_suffix}.npy')
     Qres = np.load(directory + f'Qres{file_suffix}.npy')

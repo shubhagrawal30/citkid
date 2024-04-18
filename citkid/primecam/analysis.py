@@ -158,6 +158,6 @@ def split_sweep(f, z, npoints):
     fs, zs (list): values (np.array) are single-tone sweep frequency and complex
         S21 data for each tone
     """
-    fs = [f[npoints * i: npoints * (i + 1)] for i in range(npoints)]
-    zs = [z[npoints * i: npoints * (i + 1)] for i in range(npoints)]
+    fs = [f[npoints * i: npoints * (i + 1)] for i in range(len(f) // npoints)]
+    zs = [z[npoints * i: npoints * (i + 1)] for i in range(len(f) // npoints)]
     return fs, zs

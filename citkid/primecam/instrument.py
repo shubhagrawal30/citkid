@@ -12,7 +12,7 @@ from ..util import fix_path
 class RFSOC:
     def __init__(self, out_directory, bid = 1, drid = 1,
                  udp_ip = '192.168.3.40', noiseq = True,
-                 local_primecam_path = '~/github/CCATpHive/'):
+                 local_primecam_path = '~/github/primecam_readout/'):
         """
         Send commands to the rfsoc and save the output data.
 
@@ -26,8 +26,8 @@ class RFSOC:
         # Create tmp and log directories
         directory = fix_path(os.getcwd())
         self.tmp_directory = directory + 'tmp/'
-        self.log_directory = '/'.join(directory).split('/')[:-2]) + '/'+ 'logs/'
-        for d in self.tmp_directory, self.log_directory):
+        self.log_directory = '/'.join(directory.split('/')[:-2]) + '/'+ 'logs/'
+        for d in (self.tmp_directory, self.log_directory):
             os.makedirs(d, exist_ok = True)
         # Import functions from primecam_readout
         local_primecam_path = fix_path(local_primecam_path)
@@ -404,7 +404,7 @@ class RFSOC:
             N = len(fres)
             ares = np.ones(N) * amp_max / np.sqrt(N) * 0.25
         if pres is None:
-            pres = genPhis(fres * 1e-6, ares)
+            pres = self.genPhis(fres * 1e-6, ares)
         for file, res in zip(['custom_freqs.npy', 'custom_amps.npy',
                               'custom_phis.npy'],
                              [fres, ares, pres]):

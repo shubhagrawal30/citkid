@@ -1,13 +1,16 @@
 import numpy as np
 from tqdm.auto import tqdm
-from .update_ares import get_rfsoc_power
+from .update_ares import get_rfsoc_power, update_ares_pscale, update_ares_addonly
 from .update_fres import update_fres
 from .data_io import import_iq_noise
 from .analysis import fit_iq
+from .plot import plot_ares_opt
+from ..util import save_fig
 
 def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
-                  take_noise = False, noise_time = 200, bw_factor = 1,
-                  take_rough_sweep = False, fres_update_method = 'distance'):
+                  noise_time = 200, fine_bw = 0.2, rough_bw = 0.2,
+                  take_rough_sweep = False, fres_update_method = 'distance',
+                 npoints_rough = 300, npoints_gain = 100, npoints_fine = 600):
     """
     Takes IQ sweeps and noise. The LO frequency must already be set.
 
@@ -19,11 +22,11 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
         span fres / Qres
     fcal_indices (np.array): indices into fres of calibration tones
     file_suffix (str): suffix for file names
-    take_noise (bool): if True, takes noise data. Otherwise, only takes S21
-        sweeps
-    noise_time (float): noise timestream length in seconds
-    bw_factor (float): factor by which all bandwidths are multiplied. Default
-        bandwidths for bw_factor = 1 are 0.2 GHz rough, 0.2 GHz fine, 2 GHz gain
+    noise_time (float or None): noise timestream length in seconds, or None to 
+        bypass noise acquisition 
+    fine_bw (float): fine sweep bandwidth in MHz. Gain bandwidth is 10 X fine
+        bandwidth
+    rough_bw (float): rough sweep bandwidth in MHz
     take_rough_sweep (bool): if True, first takes a rough sweep and optimizes
         the tone frequencies
     fres_update_method (str): method for updating the tone frequencies. 'minS21'
@@ -31,9 +34,11 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
         in IQ space from the off-resonance point, or 'spacing' for the point
         of largest spacing in IQ space
     """
+    fres, ares, Qres = np.array(fres), np.array(ares), np.array(Qres)
     if file_suffix != '':
         file_suffix = '_' + file_suffix
-    np.save(rfsoc.out_directory + f'fres_initial{file_suffix}.npy', fres)
+    if take_rough_sweep:
+        np.save(rfsoc.out_directory + f'fres_initial{file_suffix}.npy', fres)
     np.save(rfsoc.out_directory + f'ares{file_suffix}.npy', ares)
     np.save(rfsoc.out_directory + f'Qres{file_suffix}.npy', Qres)
     np.save(rfsoc.out_directory + f'fcal_indices{file_suffix}.npy',
@@ -43,8 +48,8 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
-        npoints = 300
-        bw = 0.2 * bw_factor
+        npoints = npoints_rough
+        bw = rough_bw 
         rfsoc.target_sweep(filename, npoints = npoints, bandwidth = bw)
         f, i, q = np.load(rfsoc.out_directory + filename)
         z = i + 1j * q
@@ -56,18 +61,18 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    npoints = 100
-    bw = 2 * bw_factor
+    npoints = npoints_gain
+    bw = 10 * fine_bw
     rfsoc.target_sweep(filename, npoints = npoints, bandwidth = bw)
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
-    npoints = 600
-    bw = 0.2 * bw_factor
+    npoints = npoints_fine
+    bw = fine_bw
     rfsoc.target_sweep(filename,  npoints = npoints, bandwidth = bw)
 
     # Noise
-    if take_noise:
+    if noise_time is not None:
         filename = f'noise{file_suffix}.npy'
         rfsoc.capture_save_noise(noise_time, filename)
 
@@ -96,9 +101,9 @@ def make_cal_tones(fres, ares, Qres, max_n_tones = 1000):
     return fres, ares, Qres, fcal_indices
 
 def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
-                  n_iterations = 10, n_addonly = 3, bw_factor = 1,
-                  fres_update_method = 'distance', plotq = False,
-                  plot_directory, verbose = False):
+                  n_iterations = 10, n_addonly = 3, fine_bw = 0.2, rough_bw = 0.2,
+                  fres_update_method = 'distance', npoints_gain = 50, npoints_fine = 400,
+                  plot_directory = None, verbose = False):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
@@ -114,12 +119,16 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
     n_iterations (int): total number of iterations
     n_addonly (int): number of iterations at the end to optimize using
         update_ares_addonly. Iterations before these use update_ares_pscale
-    bw_factor (float): bandwidth factor for IQ loops (see take_iq_noise)
-    fres_update_method (str): method for updating frequencies. See update_fres
-    plotq (bool): if True, plots and saves histograms as the optimization is
-        running
+    fine_bw (float): fine sweep bandwidth in MHz. See take_iq_noise
+    rough_bw (float): rough sweep bandwidth in MHz See take_iq_noise
+    fres_update_method (str): method for updating frequencies. See update_fres 
+    npoints_gain (int): number of points in the gain sweep 
+    npoints_fine (int): number of points in the fine sweep 
+    plot_directory (str or None): path to save histograms as the optimization is
+        running. If None, doesn't save plots 
     verbose (bool): if True, displays a progress bar of the iteration number
     """
+    fres, ares, Qres = np.array(fres), np.array(ares), np.array(Qres)
     pbar0 = list(range(n_iterations))
     if verbose:
         pbar0 = tqdm(pbar0, leave = False)
@@ -131,8 +140,9 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
             pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
         take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
-                      take_noise = False, noise_time = 200,
-                      bw_factor = bw_factor, take_rough_sweep = False)
+                      noise_time = None, fine_bw = fine_bw, rough_bw = rough_bw,
+                      take_rough_sweep = False, npoints_gain = npoints_gain,
+                      npoints_fine = npoints_fine)
         fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
                fgain, zgain, ffine, zfine, znoise, noise_dt =\
         import_iq_noise(rfsoc.out_directory, file_suffix)
@@ -144,23 +154,29 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
                None, 0, 0, 0, 0, 0, file_suffix = file_suffix,
                plotq = False, verbose = False)
         a_nl = np.array(data.sort_values('resonatorIndex').iq_a)
-        a_nl.append(a_nls)
-        np.save(rfsoc.out_directory + f'a_nl{file_suffix}.npy', a_nl)
-        if plotq:
-            fig, ax = plot_ares_opt(a_nls)
-            save_fig(fig, 'ares_hist', plot_directory)
+        a_nls.append(a_nl)
+        np.save(rfsoc.out_directory + f'a_nl_{file_suffix}.npy', a_nl)
+        if plot_directory is not None:
+            fig_hist, fig_opt = plot_ares_opt(a_nls, fcal_indices)
+            save_fig(fig_hist, 'ares_hist', plot_directory)
+            save_fig(fig_opt, 'ares_opt', plot_directory)
 
         # Update ares
         if idx0 <= n_addonly:
             ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
                                            a_nl[fit_idx], a_max = a_max,
-                                           dbm_change_high = dbm_change_high,
-                                           dbm_change_low = dbm_change_low)
+                                           dbm_change_high = 2,
+                                           dbm_change_low = 2)
         else:
             ares[fit_idx] = update_ares_addonly(fres[fit_idx], ares[fit_idx],
                                                 a_nl[fit_idx], a_max = a_max,
                                                 dbm_change_high = 1,
                                                 dbm_change_low = 1)
+        # update fres
+        f, i, q = np.load(rfsoc.out_directory + f's21_fine{file_suffix}.npy')
+        fres = update_fres(f, i + 1j * q, len(f) // len(fres), 
+                           fcal_indices = fcal_indices, method = fres_update_method,
+                        cut_other_resonators =True, fres = fres, Qres = Qres)
         # for the last iteration, save the updated ares list
         if idx0 == len(fres) - 1:
             np.save(rfsoc.out_directory + f'ares{idx0 + 1:02d}', ares)
