@@ -96,9 +96,9 @@ def make_cal_tones(fres, ares, Qres, max_n_tones = 1000):
     return fres, ares, Qres, fcal_indices
 
 def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
-                  n_iterations = 10,
-                  n_addonly = 3, bw_factor = 1, fres_update_method = 'distance',
-                  plotq = False, verbose = False):
+                  n_iterations = 10, n_addonly = 3, bw_factor = 1,
+                  fres_update_method = 'distance', plotq = False,
+                  plot_directory, verbose = False):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
@@ -125,6 +125,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         pbar0 = tqdm(pbar0, leave = False)
     fit_idx = [i for i in range(len(fres)) if i not in fcal_indices]
     a_max = get_rfsoc_power(max_dbm, fres)
+    a_nls = []
     for idx0 in pbar0:
         if verbose:
             pbar0.set_description('sweeping')
@@ -143,7 +144,12 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
                None, 0, 0, 0, 0, 0, file_suffix = file_suffix,
                plotq = False, verbose = False)
         a_nl = np.array(data.sort_values('resonatorIndex').iq_a)
-        np.save(rfsoc.out_directory + f'a_nl{file_suffix}.npy', a_nls)
+        a_nl.append(a_nls)
+        np.save(rfsoc.out_directory + f'a_nl{file_suffix}.npy', a_nl)
+        if plotq:
+            fig, ax = plot_ares_opt(a_nls)
+            save_fig(fig, 'ares_hist', plot_directory)
+
         # Update ares
         if idx0 <= n_addonly:
             ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
