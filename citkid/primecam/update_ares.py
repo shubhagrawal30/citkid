@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-def update_ares_pscale(f, a, a_nl, dbm_change_high = 1, dbm_change_low = 1,
+def update_ares_pscale(f, a, a_nl, dbm_change_high = 2, dbm_change_low = 2,
                      a_max = 1000):
     """
     Updates the amplitude of a tone to target a_nl = 0.5 by scaling the output
@@ -12,8 +12,8 @@ def update_ares_pscale(f, a, a_nl, dbm_change_high = 1, dbm_change_low = 1,
     f (float): frequency in Hz
     a (float): amplitude
     a_nl (float): nonlinearity parameter
-    dbm_change_high (float): number of dBm to decrease the power if a_nl > 0.7
-    dbm_change_low (float) : number of dBm to increase the power if a_nl < 0.1
+    dbm_change_high (float): number of dBm to decrease the power if a_nl > 0.8
+    dbm_change_low (float) : number of dBm to increase the power if a_nl < 0.01
         We should explore if we can expand the range
     a_max (float): maximum value of the amplitude
 
@@ -22,9 +22,9 @@ def update_ares_pscale(f, a, a_nl, dbm_change_high = 1, dbm_change_low = 1,
     """
     dbm = get_dbm(a, f)
     mW_power = 10 ** (dbm / 10)
-    if a_nl > 0.7:
+    if a_nl > 0.8:
         new_dbm = dbm - dbm_change_high
-    elif a_nl > 0.1:
+    elif a_nl > 0.01:
         new_dbm = 10 * np.log10(mW_power * 0.5 / a_nl)
     else:
         new_dbm = dbm + dbm_change_low

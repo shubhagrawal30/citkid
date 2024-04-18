@@ -10,28 +10,25 @@ import numpy as np
 from ..util import fix_path
 
 class RFSOC:
-    def __init__(self, tmp_directory, out_directory, bid = 1, drid = 1,
+    def __init__(self, out_directory, bid = 1, drid = 1,
                  udp_ip = '192.168.3.40', noiseq = True,
                  local_primecam_path = '~/github/CCATpHive/'):
         """
         Send commands to the rfsoc and save the output data.
-        Two directories must be set up for this code to run properly:
-        tmp_directory:  Must be a folder named 'tmp' in the same directory in
-            which the code is run
-        log_directory: must be a folder named 'logs' one folder up from the
-            directory in which the code is run
-        This is hard coded into the primecam firmware, so we have to deal with
-        it
 
         Parameters:
-        tmp_directory (str): directory where the temporary files are
-            saved by the rfsoc.
         out_directory (str): directory to transfer the saved data
         bid (int): board identification number
         drid (int): drone identification number
         udp_ip (str): IP address for noise streaming
         noiseq (bool): If False, doesn't set up noise streaming
         """
+        # Create tmp and log directories
+        directory = fix_path(os.getcwd())
+        self.tmp_directory = directory + 'tmp/'
+        self.log_directory = '/'.join(directory).split('/')[:-2]) + '/'+ 'logs/'
+        for d in self.tmp_directory, self.log_directory):
+            os.makedirs(d, exist_ok = True)
         # Import functions from primecam_readout
         local_primecam_path = fix_path(local_primecam_path)
         sys.path.insert(1,
@@ -41,13 +38,12 @@ class RFSOC:
         from queen import alcoveCommand
         from alcove_commands.tones import genPhis
         from alcove import comNumFromStr
-        self.comNumFromStr = comNumFromStr 
-        self.alcoveCommand = alcoveCommand 
+        self.comNumFromStr = comNumFromStr
+        self.alcoveCommand = alcoveCommand
         self.genPhis = genPhis
-        # Set system variables 
+        # Set system variables
         self.bid = bid
         self.drid = drid
-        self.tmp_directory = fix_path(tmp_directory)
         self.out_directory = fix_path(out_directory)
         # Bind socket for noise
         if noiseq:
@@ -414,18 +410,18 @@ class RFSOC:
                              [fres, ares, pres]):
             np.save(self.tmp_directory + file, res)
         self.transfer_custom_tone_lists()
-    
+
 def separate_iq_data(path):
     """
     Given a path to IQ data saved by the RFSoC as complex f, z,
-    split the data into float f, i, q and save it 
-    
+    split the data into float f, i, q and save it
+
     Parameters:
-    path (str): path to the saved data 
-    """ 
+    path (str): path to the saved data
+    """
     f, z = np.load(path)
     f = np.real(f)
-    i, q = np.real(z), np.imag(z) 
+    i, q = np.real(z), np.imag(z)
     np.save(path, [f, i, q])
 
 class hidePrints:

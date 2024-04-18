@@ -3,6 +3,7 @@ from tqdm.auto import tqdm
 from .update_ares import get_rfsoc_power
 from .update_fres import update_fres
 from .data_io import import_iq_noise
+from .analysis import fit_iq
 
 def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                   take_noise = False, noise_time = 200, bw_factor = 1,
@@ -122,10 +123,11 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
     pbar0 = list(range(n_iterations))
     if verbose:
         pbar0 = tqdm(pbar0, leave = False)
-        pbar0.set_description('Iterating')
-
+    fit_idx = [i for i in range(len(fres)) if i not in fcal_indices]
+    a_max = get_rfsoc_power(max_dbm, fres)
     for idx0 in pbar0:
-        a_max = get_rfsoc_power(max_dbm, fres)
+        if verbose:
+            pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
         take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                       take_noise = False, noise_time = 200,
@@ -133,4 +135,26 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
                fgain, zgain, ffine, zfine, znoise, noise_dt =\
         import_iq_noise(rfsoc.out_directory, file_suffix)
-        # Need function for wrapping IQ fits 
+        # Fit IQ loops
+        if verbose:
+            pbar0.set_description('fitting')
+        data =\
+        fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices, '',
+               None, 0, 0, 0, 0, 0, file_suffix = file_suffix,
+               plotq = False, verbose = False)
+        a_nl = np.array(data.sort_values('resonatorIndex').iq_a)
+        np.save(rfsoc.out_directory + f'a_nl{file_suffix}.npy', a_nls)
+        # Update ares
+        if idx0 <= n_addonly:
+            ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
+                                           a_nl[fit_idx], a_max = a_max,
+                                           dbm_change_high = dbm_change_high,
+                                           dbm_change_low = dbm_change_low)
+        else:
+            ares[fit_idx] = update_ares_addonly(fres[fit_idx], ares[fit_idx],
+                                                a_nl[fit_idx], a_max = a_max,
+                                                dbm_change_high = 1,
+                                                dbm_change_low = 1)
+        # for the last iteration, save the updated ares list
+        if idx0 == len(fres) - 1:
+            np.save(rfsoc.out_directory + f'ares{idx0 + 1:02d}', ares)
