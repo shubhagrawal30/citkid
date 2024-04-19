@@ -27,22 +27,3 @@ def plot_ares_opt(a_nls, fcal_indices):
         percents.append(percent)
     ax_opt.plot(indices, percents, '--k')
     return fig_hist, fig_opt
-    # for a_nl in a_nls:
-        
-    # # plot optimization history
-    # isets = list(range(0,idx0+1))
-    # a_arrs = []
-    # for ii in isets:
-    #     a_arr = np.load(rfsoc.out_directory+f'iq_a_{lo}MHz_{ii:02d}.npy')
-    #     a_arrs.append(a_arr)
-    # a_arrs = np.array(a_arrs)
-    # opt_nums = np.array([len(a_arr[(a_arr>0.4)&(a_arr<0.6)]) for a_arr in a_arrs])
-
-    # fig, ax = plt.subplots(figsize=(6,4), dpi=100)
-    # ax.plot(isets, opt_nums/len(fres), 'k.')
-    # ax.plot(isets, opt_nums/len(fres), 'k--')
-    # plt.tight_layout()
-    # ax.set(xlabel='set #', ylabel='fraction of KIDs with 0.4<a<0.6')
-    # plt.tight_layout()
-    # fig.savefig(plots+f'{lo}MHz_number_optimized.png')
-    # plt.close(fig)

@@ -45,6 +45,7 @@ class RFSOC:
         self.bid = bid
         self.drid = drid
         self.out_directory = fix_path(out_directory)
+        os.makedirs(self.out_directory, exist_ok = True)
         # Bind socket for noise
         if noiseq:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

@@ -6,6 +6,7 @@ from .data_io import import_iq_noise
 from .analysis import fit_iq
 from .plot import plot_ares_opt
 from ..util import save_fig
+import os 
 
 def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                   noise_time = 200, fine_bw = 0.2, rough_bw = 0.2,
@@ -101,7 +102,7 @@ def make_cal_tones(fres, ares, Qres, max_n_tones = 1000):
     return fres, ares, Qres, fcal_indices
 
 def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
-                  n_iterations = 10, n_addonly = 3, fine_bw = 0.2, rough_bw = 0.2,
+                  n_iterations = 10, n_addonly = 3, fine_bw = 0.2, 
                   fres_update_method = 'distance', npoints_gain = 50, npoints_fine = 400,
                   plot_directory = None, verbose = False):
     """
@@ -120,7 +121,6 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
     n_addonly (int): number of iterations at the end to optimize using
         update_ares_addonly. Iterations before these use update_ares_pscale
     fine_bw (float): fine sweep bandwidth in MHz. See take_iq_noise
-    rough_bw (float): rough sweep bandwidth in MHz See take_iq_noise
     fres_update_method (str): method for updating frequencies. See update_fres 
     npoints_gain (int): number of points in the gain sweep 
     npoints_fine (int): number of points in the fine sweep 
@@ -128,19 +128,21 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         running. If None, doesn't save plots 
     verbose (bool): if True, displays a progress bar of the iteration number
     """
+    if plot_directory is not None:
+        os.makedirs(plot_directory, exist_ok = True)
     fres, ares, Qres = np.array(fres), np.array(ares), np.array(Qres)
     pbar0 = list(range(n_iterations))
     if verbose:
         pbar0 = tqdm(pbar0, leave = False)
     fit_idx = [i for i in range(len(fres)) if i not in fcal_indices]
-    a_max = get_rfsoc_power(max_dbm, fres)
+    a_max = get_rfsoc_power(max_dbm, np.mean(fres))
     a_nls = []
     for idx0 in pbar0:
         if verbose:
             pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
         take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
-                      noise_time = None, fine_bw = fine_bw, rough_bw = rough_bw,
+                      noise_time = None, fine_bw = fine_bw,
                       take_rough_sweep = False, npoints_gain = npoints_gain,
                       npoints_fine = npoints_fine)
         fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
@@ -160,7 +162,6 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
             fig_hist, fig_opt = plot_ares_opt(a_nls, fcal_indices)
             save_fig(fig_hist, 'ares_hist', plot_directory)
             save_fig(fig_opt, 'ares_opt', plot_directory)
-
         # Update ares
         if idx0 <= n_addonly:
             ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
@@ -173,10 +174,10 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
                                                 dbm_change_high = 1,
                                                 dbm_change_low = 1)
         # update fres
-        f, i, q = np.load(rfsoc.out_directory + f's21_fine{file_suffix}.npy')
+        f, i, q = np.load(rfsoc.out_directory + f's21_fine_{file_suffix}.npy')
         fres = update_fres(f, i + 1j * q, len(f) // len(fres), 
                            fcal_indices = fcal_indices, method = fres_update_method,
                         cut_other_resonators =True, fres = fres, Qres = Qres)
         # for the last iteration, save the updated ares list
         if idx0 == len(fres) - 1:
-            np.save(rfsoc.out_directory + f'ares{idx0 + 1:02d}', ares)
+            np.save(rfsoc.out_directory + f'ares_{idx0 + 1:02d}', ares)

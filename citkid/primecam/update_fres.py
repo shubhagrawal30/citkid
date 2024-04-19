@@ -42,18 +42,18 @@ def update_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
         update = update_fr_distance
     else:
         raise ValueError("method must be 'mins21', 'distance', or 'spacing'")
-    fres = []
+    fres_new = []
     for i in range(len(f) // npoints):
         i0, i1 = npoints * i, npoints * (i + 1)
         fi, zi = f[i0:i1], z[i0:i1]
         if i not in fcal_indices:
             if cut_other_resonators:
                 spans = fres / Qres
-                fi, zi = cut_fine_scan(fi, zi, fr, fres, spans)
-            fres.append(update(fi, zi))
+                fi, zi = cut_fine_scan(fi, zi, fres, spans)
+            fres_new.append(update(fi, zi))
         else:
-            fres.append(np.mean(fi))
-    return np.array(fres)
+            fres_new.append(np.mean(fi))
+    return np.array(fres_new)
 
 def update_fr_minS21(fi, zi):
     """
@@ -123,6 +123,7 @@ def cut_fine_scan(fi, zi, fres, spans):
     ix = (fres <= max(fi)) & (fres >= min(fi))
     fres, spans = fres[ix], spans[ix]
     for fr, sp in zip(fres, spans):
-        ix = abs(fi - fr) > sp
-        fi, zi = fi[ix], zi[ix]
+        if abs(fres - np.mean(fi)) > 1e3:
+            ix = abs(fi - fr) > sp
+            fi, zi = fi[ix], zi[ix]
     return fi, zi
