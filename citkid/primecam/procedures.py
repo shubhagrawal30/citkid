@@ -11,7 +11,8 @@ import os
 def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                   noise_time = 200, fine_bw = 0.2, rough_bw = 0.2,
                   take_rough_sweep = False, fres_update_method = 'distance',
-                 npoints_rough = 300, npoints_gain = 100, npoints_fine = 600):
+                  npoints_rough = 300, npoints_gain = 100, npoints_fine = 600,
+                  nnoise_timestreams = 1):
     """
     Takes IQ sweeps and noise. The LO frequency must already be set.
 
@@ -34,6 +35,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
         for the minimum of |S21|, 'distance' for the point of furthest distance
         in IQ space from the off-resonance point, or 'spacing' for the point
         of largest spacing in IQ space
+    nnoise_timestreams (int): number of noise timestreams to take sequentially 
     """
     fres, ares, Qres = np.array(fres), np.array(ares), np.array(Qres)
     if file_suffix != '':
@@ -74,8 +76,13 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
 
     # Noise
     if noise_time is not None:
-        filename = f'noise{file_suffix}.npy'
-        rfsoc.capture_save_noise(noise_time, filename)
+        if nnoise_timestreams == 1:
+            filename = f'noise{file_suffix}.npy'
+            rfsoc.capture_save_noise(noise_time, filename)
+        else:
+            for nindex in range(nnoise_timestreams):
+                filename = f'noise{file_suffix}_{nindex:02d}.npy'
+                rfsoc.capture_save_noise(noise_time, filename)
 
 def make_cal_tones(fres, ares, Qres, max_n_tones = 1000):
     '''
@@ -155,7 +162,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices, '',
                None, 0, 0, 0, 0, 0, file_suffix = file_suffix,
                plotq = False, verbose = False)
-        a_nl = np.array(data.sort_values('resonatorIndex').iq_a)
+        a_nl = np.array(data.sort_values('resonatorIndex').iq_a, dtype = float)
         a_nls.append(a_nl)
         np.save(rfsoc.out_directory + f'a_nl_{file_suffix}.npy', a_nl)
         if plot_directory is not None:

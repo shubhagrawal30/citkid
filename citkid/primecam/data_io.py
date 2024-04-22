@@ -50,7 +50,7 @@ def import_iq_noise(directory, file_suffix, import_noiseq = True):
     if os.path.exists(path) and import_noiseq:
         inoise, qnoise = np.load(path)
         znoise = inoise + 1j * qnoise
-        noise_dt = np.load(directory + f'noise{file_suffix}_tsample.npy' )
+        noise_dt = float(np.load(directory + f'noise{file_suffix}_tsample.npy' ))
     else:
         znoise, noise_dt = None, None
     return fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\

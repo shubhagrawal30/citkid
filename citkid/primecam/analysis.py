@@ -4,35 +4,28 @@ import os
 from tqdm.auto import tqdm
 from ..res.fitter import fit_nonlinear_iq_with_gain
 from ..res.gain import fit_and_remove_gain_phase
-from ..res.data_io import make_fit_row
+from ..res.data_io import make_fit_row, separate_fit_row
 from ..util import fix_path, save_fig
 from .update_ares import get_dbm
 import matplotlib.pyplot as plt
+from ..res.gain import remove_gain
+from ..noise.analysis import compute_psd
+from ..noise.data_io import save_psd
+from .data_io import import_iq_noise
 
-def fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices,
-           directory, out_directory, power_number, in_atten,
+def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature,
-           resonator_indices = None, file_suffix = '',
+           resonator_indices = None, 
            extra_fitdata_values = {}, plotq = False, plot_factor = 1,
            overwrite = False, verbose = True):
     """
     Fits all IQ loops in a target scan
 
     Parameters:
-    fgain, zgain (np.array): gain sweep frequency and complex S21 data
-    ffine, zfine (np.array): fine sweep frequency and complex S21 data
-    fres (np.array): array of resonance frequencies in Hz
-    ares (np.array): RFSoC power settings in RFSoC units for each tone, for
-        logging
-    Qres (np.array): array of Qs corresponding to fres to cut from the fine and
-        gain scan data. Spans of f / Q are cut from the gain data and f / 2Q
-        are cut from the fine data. Spans of f / 2Q are left in the fine data
-        for the tone corresponding to that dataset
-    fcal_indices (np.array): calibration tone indices into fres. For these
-        tones, only the gain scan is fit
     directory (str): directory containing the data for logging
     out_directory (str): directory to save the plots and data, or None to bypass
         saving data
+    file_suffix (str): suffix of saved files 
     power_number (int): power index for logging
     in_atten (np.array): variable input attenuations for logging
     constant_atten (np.array): constant input attenuations for logging. The
@@ -44,7 +37,6 @@ def fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices,
     resonator_indices (np.array or None): If np.array, list of resonator
         indices corresponding to each resonator in the target sweep. If
         None, resonator indices are assigned by their index into fres
-    file_suffix (str): suffix for file names
     extra_fitdata_values (dict): keys (str) are data column names and values
         (single value or np.array with same length as number of targets) are set
         to that data column
@@ -58,11 +50,17 @@ def fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices,
     Returns:
     data (pd.DataFrame): DataFrame of fit data
     """
+    directory = fix_path(directory)
+    # Import data 
+    fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
+           fgain, zgain, ffine, zfine, znoise, noise_dt =\
+    import_iq_noise(directory, file_suffix, import_noiseq = False)
+    # Set up output files
     if file_suffix != '':
         file_suffix = '_' + file_suffix
-    directory = fix_path(directory)
     if out_directory is not None:
         out_directory = fix_path(out_directory)
+        os.makedirs(out_directory, exist_ok = True)
         fit_plot_directory = out_directory + 'plots_iq/'
         if not os.path.exists(fit_plot_directory) and plotq:
             os.makedirs(fit_plot_directory)
@@ -125,6 +123,7 @@ def fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices,
             save_fig(fig, file_prefix + '_fit', fit_plot_directory)
             plt.close(fig)
         fitrow['resonatorIndex'] = resonator_index
+        fitrow['dataIndex'] = pbar_index
         fitrow['f0'] = np.mean(ffine) # Mean of ffine is the noise frequency
         fitdf = pd.DataFrame(fitrow).T
         data = pd.DataFrame(pd.concat([data, fitdf]))
@@ -145,6 +144,89 @@ def fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices,
     if out_directory is not None:
         data.to_csv(out_path, index = False)
     return data
+
+def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
+                  plot_calq = False, plot_psdq = False, plot_timestreamq = False,
+                  deglitch = 10, cr_nstd = 5, cr_width = 1, cr_peak_spacing = 100e-6,
+                  cr_removal_time = 1e-3, overwrite = False, verbose = False,
+                 catch_exceptions = False):
+    out_directory = main_out_directory + 'noise_data/' 
+    plot_directory = main_out_directory + 'noise_plots/'
+    os.makedirs(out_directory, exist_ok = True)
+    if any([plot_calq, plot_psdq, plot_timestreamq]):
+        os.makedirs(plot_directory, exist_ok = True) 
+    file_suffix0 = file_suffix
+    if file_suffix != '':
+        file_suffix = '_' + file_suffix 
+    data = pd.read_csv(main_out_directory + f'fitdata{file_suffix}.csv') 
+    outpath = main_out_directory + f'fitdata_noise{file_suffix}_{noise_index:02d}.csv'
+    if os.path.exists(outpath) and not overwrite:
+        raise Exception(f'{outpath} already exists!!!')
+    # Import data 
+    directory = data.iloc[0].dataDirectory
+    fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
+           fgain, zgain, ffine, zfine, znoise, noise_dt =\
+    import_iq_noise(directory, file_suffix0, import_noiseq = False)
+    inoise, qnoise = np.load(directory + f'noise{file_suffix}_{noise_index:02d}.npy')
+    dt = float(np.load(directory + f'noise{file_suffix}_{noise_index:02d}_tsample.npy'))
+    fgains, zgains = split_sweep(fgain, zgain, len(fgain) // len(fres))
+    ffines, zfines = split_sweep(ffine, zfine, len(ffine) // len(fres))
+    
+    pbar = list(range(len(ffines))) 
+    if verbose:
+        pbar = tqdm(pbar, leave = False)
+        pbar.set_description('noise index')
+    data_new = pd.DataFrame([])
+    for index in pbar:
+        prefix = f'Fn{index:02d}_NI{noise_index}' 
+        iq_fit_row = data[data.dataIndex == index].iloc[0] 
+        ffine, zfine = ffines[index], zfines[index]
+
+        i, q = inoise[index], qnoise[index]
+        fnoise = fres[index]
+        znoise = i + 1j * q 
+        znoise = znoise[int(tstart / dt):]
+        
+        p_amp, p_phase, p0, popt, perr, res, plot_path =\
+            separate_fit_row(iq_fit_row) 
+        
+        zfine = remove_gain(ffine, zfine, p_amp, p_phase)
+        znoise = remove_gain(fnoise, znoise, p_amp, p_phase)
+        try:
+            if index in fcal_indices:
+                psd_onres, psd_offres, timestream_onres, timestream_offres,\
+                    cr_indices, theta_range, poly, xcal_data, figs =\
+                compute_psd(ffine, zfine, None, None, None, fnoise_offres = fnoise,
+                            znoise_offres = znoise, dt_offres = dt, flag_crs = False,
+                            deglitch = deglitch, plot_calq = plot_calq, plot_psdq = plot_psdq,
+                            plot_timestreamq = plot_timestreamq) 
+                row =\
+                save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
+                 cr_indices, theta_range, poly, xcal_data, figs, None, dt,
+                 out_directory, plot_directory, prefix = prefix, iq_fit_row = iq_fit_row)
+            else:
+                psd_onres, psd_offres, timestream_onres, timestream_offres,\
+                    cr_indices, theta_range, poly, xcal_data, figs =\
+                compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
+                            znoise_offres = None, dt_offres = None, flag_crs = True,
+                            deglitch = deglitch, plot_calq = plot_calq, plot_psdq = plot_psdq,
+                            plot_timestreamq = plot_timestreamq, cr_nstd = cr_nstd, 
+                            cr_width = cr_width, cr_peak_spacing = cr_peak_spacing,
+                           cr_removal_time = cr_removal_time) 
+                row =\
+                save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
+                 cr_indices, theta_range, poly, xcal_data, figs, dt, None,
+                 out_directory, plot_directory, prefix = prefix, iq_fit_row = iq_fit_row)
+        except Exception as e:
+            if not catch_exceptions:
+                raise e
+            row = iq_fit_row
+            plt.close('all')
+        row['noiseFrequency'] = fnoise
+        data_new = pd.concat([data_new, pd.DataFrame(row).T])
+    data_new = data_new.reset_index(drop = True)
+    data_new.to_csv(outpath, index = False)
+    return data_new
 
 def split_sweep(f, z, npoints):
     """
