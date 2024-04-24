@@ -15,7 +15,7 @@ from .data_io import import_iq_noise
 
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature,
-           resonator_indices = None, 
+           resonator_indices = None,
            extra_fitdata_values = {}, plotq = False, plot_factor = 1,
            overwrite = False, verbose = True):
     """
@@ -25,7 +25,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     directory (str): directory containing the data for logging
     out_directory (str): directory to save the plots and data, or None to bypass
         saving data
-    file_suffix (str): suffix of saved files 
+    file_suffix (str): suffix of saved files
     power_number (int): power index for logging
     in_atten (np.array): variable input attenuations for logging
     constant_atten (np.array): constant input attenuations for logging. The
@@ -51,7 +51,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     data (pd.DataFrame): DataFrame of fit data
     """
     directory = fix_path(directory)
-    # Import data 
+    # Import data
     fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
            fgain, zgain, ffine, zfine, znoise, noise_dt =\
     import_iq_noise(directory, file_suffix, import_noiseq = False)
@@ -150,19 +150,19 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   deglitch = 10, cr_nstd = 5, cr_width = 1, cr_peak_spacing = 100e-6,
                   cr_removal_time = 1e-3, overwrite = False, verbose = False,
                  catch_exceptions = False):
-    out_directory = main_out_directory + 'noise_data/' 
+    out_directory = main_out_directory + 'noise_data/'
     plot_directory = main_out_directory + 'noise_plots/'
     os.makedirs(out_directory, exist_ok = True)
     if any([plot_calq, plot_psdq, plot_timestreamq]):
-        os.makedirs(plot_directory, exist_ok = True) 
+        os.makedirs(plot_directory, exist_ok = True)
     file_suffix0 = file_suffix
     if file_suffix != '':
-        file_suffix = '_' + file_suffix 
+        file_suffix = '_' + file_suffix
     data = pd.read_csv(main_out_directory + f'fitdata{file_suffix}.csv') 
     outpath = main_out_directory + f'fitdata_noise{file_suffix}_{noise_index:02d}.csv'
     if os.path.exists(outpath) and not overwrite:
         raise Exception(f'{outpath} already exists!!!')
-    # Import data 
+    # Import data
     directory = data.iloc[0].dataDirectory
     fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
            fgain, zgain, ffine, zfine, znoise, noise_dt =\
@@ -171,25 +171,25 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     dt = float(np.load(directory + f'noise{file_suffix}_{noise_index:02d}_tsample.npy'))
     fgains, zgains = split_sweep(fgain, zgain, len(fgain) // len(fres))
     ffines, zfines = split_sweep(ffine, zfine, len(ffine) // len(fres))
-    
-    pbar = list(range(len(ffines))) 
+
+    pbar = list(range(len(ffines)))
     if verbose:
         pbar = tqdm(pbar, leave = False)
         pbar.set_description('noise index')
     data_new = pd.DataFrame([])
     for index in pbar:
-        prefix = f'Fn{index:02d}_NI{noise_index}' 
-        iq_fit_row = data[data.dataIndex == index].iloc[0] 
+        prefix = f'Fn{index:02d}_NI{noise_index}'
+        iq_fit_row = data[data.dataIndex == index].iloc[0]
         ffine, zfine = ffines[index], zfines[index]
 
         i, q = inoise[index], qnoise[index]
         fnoise = fres[index]
-        znoise = i + 1j * q 
+        znoise = i + 1j * q
         znoise = znoise[int(tstart / dt):]
-        
+
         p_amp, p_phase, p0, popt, perr, res, plot_path =\
-            separate_fit_row(iq_fit_row) 
-        
+            separate_fit_row(iq_fit_row)
+
         zfine = remove_gain(ffine, zfine, p_amp, p_phase)
         znoise = remove_gain(fnoise, znoise, p_amp, p_phase)
         try:
@@ -199,7 +199,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                 compute_psd(ffine, zfine, None, None, None, fnoise_offres = fnoise,
                             znoise_offres = znoise, dt_offres = dt, flag_crs = False,
                             deglitch = deglitch, plot_calq = plot_calq, plot_psdq = plot_psdq,
-                            plot_timestreamq = plot_timestreamq) 
+                            plot_timestreamq = plot_timestreamq)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, None, dt,
@@ -210,9 +210,9 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                 compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                             znoise_offres = None, dt_offres = None, flag_crs = True,
                             deglitch = deglitch, plot_calq = plot_calq, plot_psdq = plot_psdq,
-                            plot_timestreamq = plot_timestreamq, cr_nstd = cr_nstd, 
+                            plot_timestreamq = plot_timestreamq, cr_nstd = cr_nstd,
                             cr_width = cr_width, cr_peak_spacing = cr_peak_spacing,
-                           cr_removal_time = cr_removal_time) 
+                           cr_removal_time = cr_removal_time)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, dt, None,
