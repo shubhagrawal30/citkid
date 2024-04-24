@@ -77,7 +77,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
     # Noise
     if noise_time is not None:
         if nnoise_timestreams == 1:
-            filename = f'noise{file_suffix}.npy'
+            filename = f'noise{file_suffix}_00.npy'
             rfsoc.capture_save_noise(noise_time, filename)
         else:
             for nindex in range(nnoise_timestreams):
