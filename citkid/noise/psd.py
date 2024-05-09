@@ -2,7 +2,7 @@ from scipy.stats import binned_statistic
 import numpy as np
 import pyfftw
 
-def get_psd(x, dt):
+def get_psd(x, dt, get_frequencies = False):
     """
     Given a timeseries with a constant sample rate, calculates the power
     spectral density.
@@ -10,13 +10,17 @@ def get_psd(x, dt):
     Parameters:
     x (np.array): timeseries data
     dt (float): sample rate of timeseries
+    get_frequencies (bool): If True, also returns a list of frequencies
 
     Returns:
     psd (np.array): power spectral density
     """
     a = pyfftw.interfaces.numpy_fft.rfft(x)
     psd = 2 * np.abs(a) ** 2 * dt / len(x)
-    return psd
+    if not get_frequencies:
+        return psd
+    f = np.fft.rfftfreq(len(x), d = dt)
+    return f, psd 
 
 ################################################################################
 ############################ Binning and filtering #############################
