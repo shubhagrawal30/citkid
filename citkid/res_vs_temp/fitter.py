@@ -51,9 +51,9 @@ def fit_fr_vs_temp(temperature, fr, gamma = 1, Tc_guess = 1.3, fr_err = None,
    else:
        p0, bounds = guess_p0_fr_vs_temp(temperature, fr, Tc_guess, gamma)
    if enforced_alpha is not None:
-       p0 = p0[:3].append(p0[4])
-       bounds[0] = bounds[0][:3].append(bounds[0][4])
-       bounds[1] = bounds[1][:3].append(bounds[1][4])
+       p0 = np.append(p0[:2], p0[3])
+       bounds[0] = np.append(bounds[0][:2], bounds[0][3])
+       bounds[1] = np.append(bounds[1][:2], bounds[1][3])
    # Fit
    if fr_err is None:
        sigma = None
@@ -75,9 +75,9 @@ def fit_fr_vs_temp(temperature, fr, gamma = 1, Tc_guess = 1.3, fr_err = None,
        popt = [np.nan, np.nan, np.nan, np.nan]
        perr = [np.nan, np.nan, np.nan, np.nan]
    if enforced_alpha is not None:
-       p0 = p0[:3] + [enforced_alpha] + [p0[4]]
-       popt = popt[:3] + [enforced_alpha] + [popt[4]]
-       perr = perr[:3] + [enforced_alpha] + [perr[4]]
+       p0 = np.append(np.append(p0[:2], enforced_alpha), p0[2])
+       popt = np.append(np.append(popt[:2], enforced_alpha), popt[2])
+       perr = np.append(np.append(perr[:2],enforced_alpha), perr[2])
    # Plot
    if plotq:
        fig, ax = plot_fr_vs_temp(temperature, fr, fr_err, popt, p0, gamma)
