@@ -150,6 +150,19 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   deglitch = 10, cr_nstd = 5, cr_width = 1, cr_peak_spacing = 100e-6,
                   cr_removal_time = 1e-3, overwrite = False, verbose = False,
                  catch_exceptions = False):
+    """
+    Analyze noise data to produce timestreams and PSDs
+
+    Parameters:
+    main_out_directory (str):
+    file_suffix (str):
+    noise_index (int):
+    tstart (float): 
+    plot_calq (bool):
+    plot_psdq (bool):
+    plot_timestreamq (bool):
+    deglitch_nstd
+    """
     out_directory = main_out_directory + 'noise_data/'
     plot_directory = main_out_directory + 'noise_plots/'
     os.makedirs(out_directory, exist_ok = True)
@@ -158,7 +171,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     file_suffix0 = file_suffix
     if file_suffix != '':
         file_suffix = '_' + file_suffix
-    data = pd.read_csv(main_out_directory + f'fitdata{file_suffix}.csv') 
+    data = pd.read_csv(main_out_directory + f'fitdata{file_suffix}.csv')
     outpath = main_out_directory + f'fitdata_noise{file_suffix}_{noise_index:02d}.csv'
     if os.path.exists(outpath) and not overwrite:
         raise Exception(f'{outpath} already exists!!!')
