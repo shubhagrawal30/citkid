@@ -3,6 +3,20 @@ import numpy as np
 import matplotlib.ticker as mtick
 
 def plot_ares_opt(a_nls, fcal_indices):
+    """
+    Plots the current status of the power optimization procedure
+
+    Parameters:
+    a_nls (list): each value is an array of the values of the nonlinearity
+        parameter for each resonator for the given iteration
+    fcal_indices (array-like): indices that are calibration tones
+
+    Returns:
+    fig_hist (pyplot.fig): histogram of nonlinearity parameters for each
+        iteration
+    fig_opt (pyplot.fig): plot of the percent of the array that is optimized
+        versus iteration number
+    """
     fig_hist, ax_hist = plt.subplots(figsize = (6, 4), dpi = 200, layout = 'tight')
     ax_hist.set(xlim = (0,1.5), xlabel = 'Nonlinearity parameter', ylabel = 'Number of KIDs')
     bins = np.linspace(0, 1.5, 20)

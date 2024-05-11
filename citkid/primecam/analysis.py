@@ -146,22 +146,42 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     return data
 
 def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
-                  plot_calq = False, plot_psdq = False, plot_timestreamq = False,
-                  deglitch = 10, cr_nstd = 5, cr_width = 1, cr_peak_spacing = 100e-6,
+                  plot_calq = False, plot_psdq = False,
+                  plot_timestreamq = False, deglitch_nstd = 10, cr_nstd = 5,
+                  cr_width = 1, cr_peak_spacing = 100e-6,
                   cr_removal_time = 1e-3, overwrite = False, verbose = False,
-                 catch_exceptions = False):
+                  catch_exceptions = False):
     """
     Analyze noise data to produce timestreams and PSDs
 
     Parameters:
-    main_out_directory (str):
-    file_suffix (str):
-    noise_index (int):
-    tstart (float): 
-    plot_calq (bool):
-    plot_psdq (bool):
-    plot_timestreamq (bool):
-    deglitch_nstd
+    main_out_directory (str): directory where the IQ loop fit data csv file is
+        saved
+    file_suffix (str): file suffix of the data
+    noise_index (int): noise index to analyze
+    tstart (float): number of seconds from the beginning of the timestream to
+        cut out of the data.
+    plot_calq (bool): If True, plots the calibrations
+    plot_psdq (bool): If True, plots the PSDs
+    plot_timestreamq (bool): If True, plots the timestreams
+    deglitch_nstd (float or None): threshold for removing glitched data points
+        from the timestream, or None to bypass deglitching. Points more than
+        deglitch times the standard deviations of the theta timestream are
+        removed from the data.
+    cr_nstd (float): number of standard deviations above the mean for find_peaks
+    cr_width (int): width of cosmic rays in number of points
+    cr_peak_spacing (float): number of seconds spacing between cosmic rays
+    cr_removal_time (float): number of seconds to remove around each peak
+    overwrite (bool): if False, raises an error instead of overwriting files
+    verbose (bool): if True, displays a progress bar while analyzing noise
+    catch_exceptions (bool): If True, catches any exceptions that occur while
+        analyzing noise data and proceeds
+
+    Returns:
+    data_new (pd.DataFrame): output data with the noise analysis parameters
+        inserted. This DataFrame is also saved as a csv file in
+        main_out_directory with name
+        f'fitdata_noise{file_suffix}_{noise_index:02d}.csv'
     """
     out_directory = main_out_directory + 'noise_data/'
     plot_directory = main_out_directory + 'noise_plots/'
@@ -211,7 +231,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                     cr_indices, theta_range, poly, xcal_data, figs =\
                 compute_psd(ffine, zfine, None, None, None, fnoise_offres = fnoise,
                             znoise_offres = znoise, dt_offres = dt, flag_crs = False,
-                            deglitch = deglitch, plot_calq = plot_calq, plot_psdq = plot_psdq,
+                            deglitch = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
                             plot_timestreamq = plot_timestreamq)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
@@ -222,7 +242,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                     cr_indices, theta_range, poly, xcal_data, figs =\
                 compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                             znoise_offres = None, dt_offres = None, flag_crs = True,
-                            deglitch = deglitch, plot_calq = plot_calq, plot_psdq = plot_psdq,
+                            deglitch = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
                             plot_timestreamq = plot_timestreamq, cr_nstd = cr_nstd,
                             cr_width = cr_width, cr_peak_spacing = cr_peak_spacing,
                            cr_removal_time = cr_removal_time)
@@ -241,6 +261,9 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     data_new.to_csv(outpath, index = False)
     return data_new
 
+################################################################################
+######################### Utility functions ####################################
+################################################################################
 def split_sweep(f, z, npoints):
     """
     Splits an S21 sweep into subarrays corresponding to each tone
