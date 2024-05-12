@@ -85,9 +85,10 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                 rfsoc.capture_save_noise(noise_time, filename)
 
 def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
-                  n_iterations = 10, n_addonly = 3, fine_bw = 0.2,
-                  fres_update_method = 'distance', npoints_gain = 50,
-                  npoints_fine = 400, plot_directory = None, verbose = False):
+                  a_target = 0.5, n_iterations = 10, n_addonly = 3,
+                  fine_bw = 0.2, fres_update_method = 'distance',
+                  npoints_gain = 50, npoints_fine = 400, plot_directory = None,
+                  verbose = False):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
@@ -100,6 +101,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         span fres / Qres
     fcal_indices (np.array): calibration tone indices
     max_dbm (float): maximum power per tone in dBm
+    a_target (float): target value for a_nl. Must be in range (0, 0.77]
     n_iterations (int): total number of iterations
     n_addonly (int): number of iterations at the end to optimize using
         update_ares_addonly. Iterations before these use update_ares_pscale
@@ -148,12 +150,14 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         # Update ares
         if idx0 <= n_addonly:
             ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
-                                           a_nl[fit_idx], a_max = a_max,
-                                           dbm_change_high = 2,
+                                           a_nl[fit_idx], a_target = a_target,
+                                           a_max = a_max, dbm_change_high = 2,
                                            dbm_change_low = 2)
         else:
             ares[fit_idx] = update_ares_addonly(fres[fit_idx], ares[fit_idx],
-                                                a_nl[fit_idx], a_max = a_max,
+                                                a_nl[fit_idx],
+                                                a_target = a_target,
+                                                a_max = a_max,
                                                 dbm_change_high = 1,
                                                 dbm_change_low = 1)
         # update fres

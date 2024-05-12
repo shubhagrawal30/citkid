@@ -2,11 +2,11 @@ import os
 import numpy as np
 
 def update_ares_pscale(f, a, a_nl, dbm_change_high = 2, dbm_change_low = 2,
-                     a_max = 1000):
+                       a_target = 0.5, a_max = 1000):
     """
-    Updates the amplitude of a tone to target a_nl = 0.5 by scaling the output
-    power of the RFSoC linearly with a_nl. If a_nl < 0.1 or a_nl > 0.7, shifts
-    the output amplitude by a fixed value instead.
+    Updates the amplitude of a tone to target a_nl  by scaling the output
+    power of the RFSoC linearly with a_nl. If a_nl < a_target * 0.1 / 0.5 or
+    a_nl > 0.77, shifts the output amplitude by a fixed value instead.
 
     Parameters:
     f (float): frequency in Hz
@@ -15,17 +15,20 @@ def update_ares_pscale(f, a, a_nl, dbm_change_high = 2, dbm_change_low = 2,
     dbm_change_high (float): number of dBm to decrease the power if a_nl > 0.8
     dbm_change_low (float) : number of dBm to increase the power if a_nl < 0.01
         We should explore if we can expand the range
+    a_target (float): target value for a. Must be in (0, 0.77]
     a_max (float): maximum value of the amplitude
 
     Returns:
     a_new (float): updated value of a
     """
+    if a_target > 0.77 or a_target <= 0:
+        raise ValueError('a_target must be in (0, 0.77]')
     dbm = get_dbm(a, f)
     mW_power = 10 ** (dbm / 10)
-    if a_nl > 0.8:
+    if a_nl > 0.77:
         new_dbm = dbm - dbm_change_high
-    elif a_nl > 0.01:
-        new_dbm = 10 * np.log10(mW_power * 0.5 / a_nl)
+    elif a_nl > a_target * 0.01 / 0.5:
+        new_dbm = 10 * np.log10(mW_power * a_target / a_nl)
     else:
         new_dbm = dbm + dbm_change_low
     a_new = get_rfsoc_power(new_dbm, f)
@@ -35,7 +38,7 @@ def update_ares_pscale(f, a, a_nl, dbm_change_high = 2, dbm_change_low = 2,
 update_ares_pscale = np.vectorize(update_ares_pscale)
 
 def update_ares_addonly(f, a, a_nl, dbm_change_high = 1, dbm_change_low = 1,
-                        a_max = 1000):
+                        a_target = 0.5, a_max = 1000):
     """
     Updates the amplitude of a tone to target 0.4 < a_nl < 0.6 by adding or
     subtracting a fixed power in dB.
@@ -47,16 +50,19 @@ def update_ares_addonly(f, a, a_nl, dbm_change_high = 1, dbm_change_low = 1,
     dbm_change_high (float): number of dBm to decrease the power if a_nl > 0.6
     dbm_change_low (float) : number of dBm to increase the power if a_nl < 0.4
         We should explore if we can expand the range
+    a_target (float): target value for a. Must be in (0, 0.77]
     a_max (float): maximum value of the amplitude
 
     Returns:
     a_new (float): updated value of a
     """
+    if a_target > 0.77 or a_target <= 0:
+        raise ValueError('a_target must be in (0, 0.77]')
     dbm = get_dbm(a, f)
     mW_power = 10 ** (dbm / 10)
-    if a_nl > 0.6:
+    if a_nl > a_target * 0.6 / 0.5:
         new_dbm = dbm - dbm_change_high
-    elif a_nl < 0.4:
+    elif a_nl < a_target * 0.4 / 0.5:
         new_dbm = dbm + dbm_change_low
     else:
         new_dbm = dbm
