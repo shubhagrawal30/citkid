@@ -23,8 +23,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
 
     Parameters:
     directory (str): directory containing the data for logging
-    out_directory (str): directory to save the plots and data, or None to bypass
-        saving data
+    out_directory (str or None): directory to save the plots and data, or 
+        None to bypass saving data
     file_suffix (str): suffix of saved files
     power_number (int): power index for logging
     in_atten (np.array): variable input attenuations for logging

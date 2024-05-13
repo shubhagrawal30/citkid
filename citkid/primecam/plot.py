@@ -23,7 +23,11 @@ def plot_ares_opt(a_nls, fcal_indices):
     for index, a_nl in enumerate(a_nls):
         [a_nl[i] for i in range(len(a_nl)) if i not in fcal_indices]
         color = plt.cm.viridis(index / len(a_nls))
-        ax_hist.hist(a_nl, bins, label = index, edgecolor = color, color = color, alpha = 0.5)# , fill = False, histtype = 'step')
+        if index == len(a_nls):
+            alpha = 0.8 
+        else:
+            alpha = 0.5
+        ax_hist.hist(a_nl, bins, label = index, edgecolor = color, color = color, alpha = alpha)
     ax_hist.legend(title = 'Iteration', framealpha = 1)
 
     fig_opt, ax_opt = plt.subplots(figsize = (6, 4), dpi = 200, layout = 'tight')

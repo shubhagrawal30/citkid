@@ -130,17 +130,16 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
                       noise_time = None, fine_bw = fine_bw,
                       take_rough_sweep = False, npoints_gain = npoints_gain,
                       npoints_fine = npoints_fine)
-        fres_initial, fres, ares, Qres, fcal_indices, frough, zrough,\
-               fgain, zgain, ffine, zfine, znoise, noise_dt =\
-        import_iq_noise(rfsoc.out_directory, file_suffix)
         # Fit IQ loops
         if verbose:
             pbar0.set_description('fitting')
         data =\
-        fit_iq(fgain, zgain, ffine, zfine, fres, ares, Qres, fcal_indices, '',
-               None, 0, 0, 0, 0, 0, file_suffix = file_suffix,
-               plotq = False, verbose = False)
+        fit_iq(rfsoc.out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False)
         a_nl = np.array(data.sort_values('resonatorIndex').iq_a, dtype = float)
+        if len(a_nls):
+            a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan] 
+        else:
+            a_nl[a_nl == np.nan] = 2 
         a_nls.append(a_nl)
         np.save(rfsoc.out_directory + f'a_nl_{file_suffix}.npy', a_nl)
         if plot_directory is not None:
