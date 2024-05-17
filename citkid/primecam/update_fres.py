@@ -123,7 +123,7 @@ def cut_fine_scan(fi, zi, fres, spans):
     ix = (fres <= max(fi)) & (fres >= min(fi))
     fres, spans = fres[ix], spans[ix]
     for fr, sp in zip(fres, spans):
-        if abs(fres - np.mean(fi)) > 1e3:
+        if abs(fr - np.mean(fi)) > 1e3:
             ix = abs(fi - fr) > sp
             fi, zi = fi[ix], zi[ix]
     return fi, zi
