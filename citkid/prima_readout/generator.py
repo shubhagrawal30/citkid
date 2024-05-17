@@ -3,10 +3,16 @@ import numpy as np
 from numba import jit, vectorize
 
 @jit(nopython=True)
-def generate_data(npoints_fine = 600, npoints_gain = 50):
+def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1):
     """
     Generates random resonance data. Assumes resonance frequencies were found
     from the point of max spacing. I can add other options if desired.
+
+    Parameters:
+    npoints_fine (int): number of points in the fine sweep
+    npoints_gain (int): number of points in the gain sweep
+    noise_factor (float): factor that scales the noise. Lower this for lower
+        noise, or raise for higher noise
 
     Returns:
     ffine (np.array): fine-sweep frequency data in Hz
@@ -14,21 +20,26 @@ def generate_data(npoints_fine = 600, npoints_gain = 50):
     fgain (np.array): gain-sweep frequency data in Hz
     zgain (np.array): gain-sweep complex S21 data
     """
-    fr, Qr, amp, phi, a, p_amp, p_phase, noise_std, fine_bw =\
-        generate_resonance_parameters()
+    fr, Qr, amp, phi, a, p_amp, p_phase, fine_bw, f_noise_std, a_noise_std =\
+                                                 generate_resonance_parameters()
+    f_noise_std *= noise_factor
+    a_noise_std *= noise_factor
     # Rough sweep
     f = np.linspace(fr - fine_bw / 2, fr + fine_bw / 2, 400)
-    z = nonlinear_iq_simple(f, fr, Qr, amp, phi, a, p_amp, p_phase)
-    # z += get_noise(f, noise_std * np.median(np.abs(z)))
+    f_noisy = f + np.random.normal(0, f_noise_std, len(f))
+    z = nonlinear_iq_simple(f_noisy, fr, Qr, amp, phi, a, p_amp, p_phase)
+    z *= np.random.normal(1, a_noise_std, len(z))
     f0 = update_fr_spacing(f, z)
     # Fine sweep
-    ffine = np.linspace(f0 - fine_bw / 2, f0 + fine_bw / 2, 600)
-    zfine = nonlinear_iq_simple(ffine, fr, Qr, amp, phi, a, p_amp, p_phase)
-    # zfine += get_noise(ffine, noise_std * np.median(np.abs(zfine)))
+    ffine = np.linspace(f0 - fine_bw / 2, f0 + fine_bw / 2, npoints_fine)
+    f_noisy = ffine + np.random.normal(0, f_noise_std, len(ffine))
+    zfine = nonlinear_iq_simple(f_noisy, fr, Qr, amp, phi, a, p_amp, p_phase)
+    zfine *= np.random.normal(1, a_noise_std, len(zfine))
     # Gain sweep
-    fgain = np.linspace(f0 - 10 * fine_bw / 2, f0 + 10 * fine_bw / 2, 50)
-    zgain = nonlinear_iq_simple(fgain, fr, Qr, amp, phi, a, p_amp, p_phase)
-    # zgain += get_noise(fgain, noise_std * np.median(np.abs(zfine)))
+    fgain = np.linspace(f0 - 5 * fine_bw, f0 + 5 * fine_bw, npoints_gain)
+    f_noisy = fgain + np.random.normal(0, f_noise_std, len(fgain))
+    zgain = nonlinear_iq_simple(f_noisy, fr, Qr, amp, phi, a, p_amp, p_phase)
+    zgain *= np.random.normal(1, a_noise_std, len(zgain))
     return ffine, zfine, fgain, zgain
 
 @jit(nopython=True)
@@ -47,23 +58,25 @@ def generate_resonance_parameters():
         a = 4 * sqrt(3) / 9 ~ 0.77.  Sometimes referred to as a_nl
     p_amp (array-like): gain polynomial coefficients
     p_phase (array-like): phase polynomial coefficients
-    noise_std (float): z noise standard deviation
     fine_bw (float): fine-scan bandwidth in Hz
+    f_noise_std (float): frequency noise standard deviation
+    a_noise_std (float): amplitude noise standard deviation
     """
-    fr  = np.random.uniform(0.4e9, 2.4e9)
-    Qr  = np.random.uniform(1e3, 500e3)
-    amp = np.random.uniform(1e-5, 1 - 1e-5)
-    phi = np.random.uniform(-np.pi / 2, np.pi / 2)
-    a   = np.random.uniform(1e-5, 0.8)
-    p_amp  = [np.random.uniform(-100, 100), np.random.uniform(-100, 100),
-               np.random.uniform(-100, 100), np.random.uniform(-100, 100)]
-    p_amp = [1]
-    p_phase = [np.random.uniform(-1e-9, -1e-6), np.random.uniform(-1e3, 1e3)]
-    noise_std = np.random.uniform(1e-3, 2)
-    noise_nstd = 0
+    random = lambda low, high: np.random.uniform(low, high)
+    random_log = lambda low, high: np.exp(np.random.uniform(np.log(low),
+                                                            np.log(high)))
+    fr  = random(0.4e9, 2.4e9)
+    Qr  = random(1e3, 500e3)
+    amp = random(1e-5, 1 - 1e-5)
+    phi = random(-np.pi / 2, np.pi / 2)
+    a   = random_log(1e-5, 0.8)
+    p_amp  = [random(-5e-17, 5e-17), random(-8e-5, 8e-5), random(-150, 20)]
+    p_phase = [-random_log(1e-9, 1e-6), random(-1e3, 1e3)]
     fwhm = fr / Qr
-    fine_bw = np.random.uniform(fwhm * 2, fwhm * 5)
-    return fr, Qr, amp, phi, a, p_amp, p_phase, noise_std, fine_bw
+    fine_bw = random(fwhm * 3, fwhm * 6)
+    f_noise_std = random(1, 500)
+    a_noise_std = random(1e-5, 3e-3)
+    return fr, Qr, amp, phi, a, p_amp, p_phase, fine_bw, f_noise_std, a_noise_std
 
 @jit(nopython=True)
 def get_noise(f, std_dev):
@@ -120,8 +133,9 @@ def nonlinear_iq_simple(f, fr, Qr, amp, phi, a, p_amp, p_phase):
     yg = Qr * deltaf / fr
     y = get_y(yg, a)
     s21_res = (1. - (amp / np.cos(phi)) * np.exp(1.j * phi) / (1. + 2.j * y))
-    s21_readout = 10 ** (polyval(p_amp, f) / 20) + 0j
-    s21_readout *= np.exp(1j * polyval(p_phase, f))
+    f0 = np.mean(f)
+    s21_readout = 10 ** (polyval(p_amp, f - f0) / 20) + 0j
+    s21_readout *= np.exp(1j * polyval(p_phase, f - f0))
     z = s21_readout * s21_res
     return z
 
