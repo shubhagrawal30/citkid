@@ -110,7 +110,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     # Plots
     if plot_calq:
         fig_cal = plot_cal(ffine, zfine, popt_circle, fnoise, znoise,
-                           znoise_offres, theta_range, theta_fine, theta_clean, 
+                           znoise_offres, theta_range, theta_fine, theta_clean,
                            poly)
     else:
         fig_cal = None
@@ -310,5 +310,4 @@ def calculate_theta_A(zfine, znoise, origin):
     # Make sure the range of theta matches the range of the fine scan
     theta_noise = np.where(theta_noise > 1, theta_noise - 2 * np.pi,
                            theta_noise)
-
     return theta_fine, theta_noise, A_noise

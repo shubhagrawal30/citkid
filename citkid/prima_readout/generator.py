@@ -15,10 +15,10 @@ def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1):
         noise, or raise for higher noise
 
     Returns:
-    ffine (np.array): fine-sweep frequency data in Hz
-    zfine (np.array): fine-sweep complex S21 data
-    fgain (np.array): gain-sweep frequency data in Hz
-    zgain (np.array): gain-sweep complex S21 data
+    ffine (np.array): fine sweep frequency data in Hz
+    zfine (np.array): fine sweep complex S21 data
+    fgain (np.array): gain sweep frequency data in Hz
+    zgain (np.array): gain sweep complex S21 data
     """
     fr, Qr, amp, phi, a, p_amp, p_phase, fine_bw, f_noise_std, a_noise_std =\
                                                  generate_resonance_parameters()
@@ -58,7 +58,7 @@ def generate_resonance_parameters():
         a = 4 * sqrt(3) / 9 ~ 0.77.  Sometimes referred to as a_nl
     p_amp (array-like): gain polynomial coefficients
     p_phase (array-like): phase polynomial coefficients
-    fine_bw (float): fine-scan bandwidth in Hz
+    fine_bw (float): fine sweep bandwidth in Hz
     f_noise_std (float): frequency noise standard deviation
     a_noise_std (float): amplitude noise standard deviation
     """
