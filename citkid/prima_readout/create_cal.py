@@ -39,7 +39,7 @@ def get_theta_cal(ffine, zfine, fgain, zgain, fs, Qs, plotq = False):
     # Theta vector
     origin, x, fig_fine = get_theta_vec(zfine_rmvd, plotq = plotq)
     # fine-scan theta
-    theta_fine = calculate_theta(zfine_rmvd, origin, x)
+    theta_fine = calculate_theta(ffine, zfine, p_amp, p_phase, origin, x)
     return p_amp, p_phase, origin, x, theta_fine, (fig_gain, fig_fine)
 
 def get_theta_vec(zfine_rmvd, plotq = False):
