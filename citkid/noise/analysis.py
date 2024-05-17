@@ -72,8 +72,12 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     ix = np.argsort(ffine)
     ffine, zfine = ffine[ix], zfine[ix]
     # Fit circle
-    popt_circle, _ = fit_iq_circle(zfine, plotq = False)
-    origin = popt_circle[0] + 1j * popt_circle[1]
+    if znoise is None:
+        origin = 0
+        popt_circle = [np.nan, np.nan, np.nan]
+    else:
+        popt_circle, _ = fit_iq_circle(zfine, plotq = False)
+        origin = popt_circle[0] + 1j * popt_circle[1]
     # Extract theta and x
     if znoise_offres is not None:
         znoise_offres = np.array(znoise_offres)
@@ -106,12 +110,13 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     # Plots
     if plot_calq:
         fig_cal = plot_cal(ffine, zfine, popt_circle, fnoise, znoise,
-                           znoise_offres, theta_range, theta_fine, theta, poly)
+                           znoise_offres, theta_range, theta_fine, theta_clean, 
+                           poly)
     else:
         fig_cal = None
     if plot_timestreamq:
-        fig_timestream = plot_timestream(dt, theta, dt_offres, theta_offres,
-                                         poly, x, fnoise, cr_indices)
+        fig_timestream = plot_timestream(dt, theta, theta_clean, dt_offres,
+                                         theta_offres, x, cr_indices)
     else:
         fig_timestream = None
     if plot_psdq:
@@ -119,11 +124,14 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                            f_psd_offres, spar_offres, sper_offres)
     else:
         fig_psd = None
-    psd_onres = (f_psd, spar, sper, sxx)
-    psd_offres = (f_psd_offres, spar_offres, sper_offres)
-    timestream_onres = (theta, x)
-    timestream_offres = (theta_offres)
-    xcal_data = (1 - ffine / fnoise, theta_fine)
+    psd_onres = [f_psd, spar, sper, sxx]
+    psd_offres = [f_psd_offres, spar_offres, sper_offres]
+    timestream_onres = [theta, x]
+    timestream_offres = [theta_offres]
+    if fnoise is not None:
+        xcal_data = (1 - ffine / fnoise, theta_fine)
+    else:
+        xcal_data = [None]
     figs = (fig_cal, fig_timestream, fig_psd)
     return psd_onres, psd_offres, timestream_onres, timestream_offres,\
            cr_indices, theta_range, poly, xcal_data, figs
@@ -212,13 +220,13 @@ def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3,
     ix0 = np.argmin(abs(min(theta_deglitch) - theta_fine))
     ix1 = np.argmin(abs(max(theta_deglitch) - theta_fine))
     if ix1 < ix0:
-        ix0, ix1 = ix1, ix0 
-    
+        ix0, ix1 = ix1, ix0
+
     if theta_fine[ix0] > min(theta_deglitch):
         ix0 -= 1
     if theta_fine[ix1] < max(theta_deglitch):
         ix1 += 1
-    ix1 += 1 # ix1 is not inclusive 
+    ix1 += 1 # ix1 is not inclusive
     npoints_missing = min_cal_points - (ix1 - ix0)
     if npoints_missing > 0:
         half = int(np.ceil(npoints_missing / 2))
@@ -227,7 +235,7 @@ def calibrate_x(ffine, theta_fine, theta, deglitch = None, poly_deg = 3,
     if len(theta_fine) < min_cal_points:
         raise Exception(f'theta_fine must be at least min_cal_points = {min_cal_points} points long')
     if ix0 < 0:
-        ix1 += - ix0 # Increase ix1 by the amount below 0 
+        ix1 += - ix0 # Increase ix1 by the amount below 0
         ix0 = 0
     if ix1 >= len(theta_fine):
         ix0 += ix1 - len(theta_fine) # increase ix2 by the amount above len(theta_fine)

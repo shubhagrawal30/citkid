@@ -22,8 +22,11 @@ def remove_cosmic_rays(theta, A, dt, cr_nstd = 5, cr_width = 12,
     A_rmvd (np.array): amplitude array with cosmic rays removed
     """
     height = np.mean(-theta) + cr_nstd * np.std(theta)
+    distance = int(cr_peak_spacing / dt) 
+    if distance < 1:
+        distance = 1
     cr_indices, _ = find_peaks(-theta, width = cr_width,
-                               distance = int(cr_peak_spacing / dt),
+                               distance = distance,
                                height = height)
     start_offset = int(200e-6 / dt)
     istarts = cr_indices - start_offset

@@ -2,7 +2,7 @@ from scipy.stats import binned_statistic
 import numpy as np
 import pyfftw
 
-def get_psd(x, dt):
+def get_psd(x, dt, get_frequencies = False):
     """
     Given a timeseries with a constant sample rate, calculates the power
     spectral density.
@@ -10,18 +10,23 @@ def get_psd(x, dt):
     Parameters:
     x (np.array): timeseries data
     dt (float): sample rate of timeseries
+    get_frequencies (bool): If True, also returns a list of frequencies
 
     Returns:
     psd (np.array): power spectral density
     """
     a = pyfftw.interfaces.numpy_fft.rfft(x)
     psd = 2 * np.abs(a) ** 2 * dt / len(x)
-    return psd
+    if not get_frequencies:
+        return psd
+    f = np.fft.rfftfreq(len(x), d = dt)
+    return f, psd 
 
 ################################################################################
 ############################ Binning and filtering #############################
 ################################################################################
-def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None):
+def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None,
+            pt_frequency = 1.39296):
     """
     Bins noise data logarithmically. Optionally filters pulse tubes before
     binning and leaves frequencies below fmin unbinned.
@@ -35,6 +40,7 @@ def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None):
         binning
     filter_pt_n (int or None): number of pulse tube harmonics to filter out of
         the data before binning, or None to bypass pulse tube filtering
+    pt_frequency (float): pulse tube frequency in Hz
 
     Returns:
     binned_data (list): values (np.array) are binned data corresponding to
@@ -48,7 +54,7 @@ def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None):
     ix = f > 0
     f, data = f[ix], [d[ix] for d in data]
     if filter_pt_n is not None:
-        data = [filter_pt(f, d, filter_pt_n) for d in data]
+        data = [data[0]] + [filter_pt(f, d, filter_pt_n, pt_frequency) for d in data[1:]]
     ix = f < fmin
     f0, data0 = f[ix], [d[ix] for d in data]
     # Create logarithmically spaced bins, and remove bins that don't have data
@@ -62,7 +68,7 @@ def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None):
                             binned_data[i]]) for i in range(len(binned_data))]
     return binned_data
 
-def filter_pt(f, y, n = 20):
+def filter_pt(f, y, n = 20, pt_frequency = 1.39296):
     """
     Filter pulse tube spikes out of noise data
 
@@ -70,11 +76,12 @@ def filter_pt(f, y, n = 20):
     f (np.array): frequency data in Hz
     y (np.array): data to filter
     n (int): number of pulse tube harmonics to filter
+    pt_frequency (float): pulse tube frequency in Hz
 
     Returns:
     y_filt (np.array): y data with pulse tube spikes removed
     """
-    f0s = [1.39296 * i for i in range(1, n)]
+    f0s = [pt_frequency * i for i in range(1, n)]
     for f0 in f0s:
         # Get width from typical values
         d = np.interp(f0, [1, 21, 32.1], [0.1, 0.08, 0.01])

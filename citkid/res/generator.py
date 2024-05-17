@@ -3,7 +3,7 @@ from numba import jit
 import numpy as np
 '''Code to generate random resonances for simulations'''
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def get_random_dataset(normalize = False):
     """
     Gets a dataset with random system parameters and random resonators
@@ -26,8 +26,8 @@ def get_random_dataset(normalize = False):
         span = (p[0] / p[1]) * 20
         ix = np.where(np.abs(f - p[0]) < span)[0]
         i0, i1 = min(ix), max(ix)
-        z = np.concatenate((z[:i0], z[i0:i1] * get_resonance_s21(f[i0:i1],
-                                                                 *p), z[i1:]))
+        zmid = z[i0:i1] * get_resonance_s21(f[i0:i1], *p)
+        z = np.concatenate((z[:i0], zmid, z[i1:]))
     fres = np.array([p[0] for p in resonances])
     if normalize:
         z /= np.mean(np.abs(z))
@@ -171,9 +171,9 @@ def get_ranges(frange):
     """
     frrange = np.array((frange[0] * 1.05, frange[1] * 0.95)) # fr
     Qrrange = np.array((1e3, 200e3)) # Qr
-    amprange = np.array((1e-5, 1 - 1e-5)) # amp
-    phirange = np.array((-np.pi, np.pi)) # phi
-    arange = np.array((0, 2)) #a
+    amprange = np.array((1e-3, 1 - 1e-5)) # amp
+    phirange = np.array((-np.pi / 2, np.pi / 2)) # phi
+    arange = np.array((0.01, 0.8)) #a
     return frrange, Qrrange, amprange, phirange, arange
 
 @jit(nopython=True)
@@ -190,6 +190,7 @@ def get_random_system_parameters():
     """
     a0_range = np.array([10 ** (-100 / 20), 10 ** (100 / 20)])
     noise_factor_range = np.array([2.2, 3])
+    noise_factor_range = np.array([1.5, 2.5])
     f0_range = np.array([50e6, 1e9])
     cable_delay_range = np.array([1e-9, 500e-9])
     sin_range = np.array([30e6, 1e9])
@@ -223,6 +224,7 @@ def get_random_frange():
     frange_start = np.random.uniform(1e7, 1e9)
     frange_end = np.random.uniform(frange_start + nres * 0.5e6, 3e9)
     frange = np.array([frange_start, frange_end])
+    frange = np.array([400e6, 2400e6])
     return nres, frange
 
 @jit(nopython=True)

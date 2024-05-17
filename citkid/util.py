@@ -19,7 +19,8 @@ def fix_path(path):
         fixed_path += '/'
     return fixed_path
 
-def save_fig(fig, filename, plot_directory, ftype = 'png'):
+def save_fig(fig, filename, plot_directory, ftype = 'png',
+             tight_layout = False):
     """
     Saves a pyplot figure with standard settings
 
@@ -28,14 +29,20 @@ def save_fig(fig, filename, plot_directory, ftype = 'png'):
     filename (str): name of the file to save, without extension
     plot_directory (str): directory to save the file
     ftype (str): file type to save. Common types are 'png' and 'eps'
+    tight_layout (bool): if True, sets the figure layout to 'tight'
     """
     if fig is not None:
         plot_directory = fix_path(plot_directory)
         fig.set_facecolor('white')
-        fig.tight_layout()
+        if tight_layout:
+            fig.tight_layout()
         plt.figure(fig.number)
-        plt.savefig(plot_directory + filename + '.' + ftype,
-                    bbox_inches='tight', pad_inches = 0.05)
+        try:
+            plt.savefig(plot_directory + filename + '.' + ftype,
+                        bbox_inches='tight', pad_inches = 0.05)
+        except Exception as e:
+            plt.savefig(plot_directory + filename + '.' + ftype,
+                        pad_inches = 0.05)
         plt.close(fig)
 
 def save_figure_to_memory(fig):

@@ -161,3 +161,6 @@ cython_debug/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# Redis
+citkid/primecam/dump.rdb
