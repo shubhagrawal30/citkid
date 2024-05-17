@@ -110,7 +110,8 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     # Plots
     if plot_calq:
         fig_cal = plot_cal(ffine, zfine, popt_circle, fnoise, znoise,
-                           znoise_offres, theta_range, theta_fine, theta, poly)
+                           znoise_offres, theta_range, theta_fine, theta_clean, 
+                           poly)
     else:
         fig_cal = None
     if plot_timestreamq:
