@@ -107,6 +107,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     else:
         theta, poly, x, cr_indices, theta_range = None, None, None, None, None
         f_psd, spar, sper, sxx = None, None, None, None
+        theta_clean = None
     # Plots
     if plot_calq:
         fig_cal = plot_cal(ffine, zfine, popt_circle, fnoise, znoise,
