@@ -9,7 +9,7 @@ def get_theta_cal(ffine, zfine, fgain, zgain, fs, Qs, plotq = False):
     data to theta
 
     Parameters:
-    ffine (array-like): fine sweep frequency data in Hz
+    ffine (array-like): fine sweep frequency data in Hz 
     zfine (array-like): fine sweep complex S21 data
     fgain (array-like): gain sweep frequency data in Hz
     zgain (array-like): gain sweep complex S21 data

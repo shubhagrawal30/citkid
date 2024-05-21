@@ -23,7 +23,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
 
     Parameters:
     directory (str): directory containing the data for logging
-    out_directory (str or None): directory to save the plots and data, or 
+    out_directory (str or None): directory to save the plots and data, or
         None to bypass saving data
     file_suffix (str): suffix of saved files
     power_number (int): power index for logging
@@ -166,7 +166,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     plot_timestreamq (bool): If True, plots the timestreams
     deglitch_nstd (float or None): threshold for removing glitched data points
         from the timestream, or None to bypass deglitching. Points more than
-        deglitch times the standard deviations of the theta timestream are
+        deglitch_nstd times the standard deviations of the theta timestream are
         removed from the data.
     cr_nstd (float): number of standard deviations above the mean for find_peaks
     cr_width (int): width of cosmic rays in number of points
@@ -231,7 +231,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                     cr_indices, theta_range, poly, xcal_data, figs =\
                 compute_psd(ffine, zfine, None, None, None, fnoise_offres = fnoise,
                             znoise_offres = znoise, dt_offres = dt, flag_crs = False,
-                            deglitch = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
+                            deglitch_nstd = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
                             plot_timestreamq = plot_timestreamq)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
@@ -242,7 +242,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                     cr_indices, theta_range, poly, xcal_data, figs =\
                 compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                             znoise_offres = None, dt_offres = None, flag_crs = True,
-                            deglitch = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
+                            deglitch_nstd = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
                             plot_timestreamq = plot_timestreamq, cr_nstd = cr_nstd,
                             cr_width = cr_width, cr_peak_spacing = cr_peak_spacing,
                            cr_removal_time = cr_removal_time)
