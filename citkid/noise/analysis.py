@@ -74,10 +74,12 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     # Fit circle
     if znoise is None:
         origin = 0
+        radius = 1
         popt_circle = [np.nan, np.nan, np.nan]
     else:
         popt_circle, _ = fit_iq_circle(zfine, plotq = False)
         origin = popt_circle[0] + 1j * popt_circle[1]
+        radius = popt_circle[2]
     # Extract theta and x
     if znoise_offres is not None:
         znoise_offres = np.array(znoise_offres)
@@ -86,7 +88,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                               znoise_offres, dt_offres, deglitch_nstd,
                               flag_crs = False, offres = True)
 
-        spar_offres = 10 * np.log10(get_psd(theta_offres_clean, dt_offres))
+        spar_offres = 10 * np.log10(get_psd(radius * theta_offres_clean, dt_offres))
         sper_offres = 10 * np.log10(get_psd(A_offres_clean, dt_offres))
         f_psd_offres = np.fft.rfftfreq(len(theta_offres_clean), d = dt_offres)
     else:
@@ -101,7 +103,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                               **cr_kwargs)
 
         sxx = get_psd(x, dt)
-        spar = 10 * np.log10(get_psd(theta_clean, dt))
+        spar = 10 * np.log10(get_psd(radius * theta_clean, dt))
         sper = 10 * np.log10(get_psd(A_clean, dt))
         f_psd = np.fft.rfftfreq(len(theta_clean), d = dt)
     else:
