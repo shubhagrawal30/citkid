@@ -147,10 +147,10 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
 
 def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   plot_calq = False, plot_psdq = False,
-                  plot_timestreamq = False, deglitch_nstd = 10, cr_nstd = 5,
-                  cr_width = 1, cr_peak_spacing = 100e-6,
-                  cr_removal_time = 1e-3, overwrite = False, verbose = False,
-                  catch_exceptions = False):
+                  plot_timestreamq = False, plot_factor = 1,
+                  deglitch_nstd = 10, cr_nstd = 5, cr_width = 1,
+                  cr_peak_spacing = 100e-6, cr_removal_time = 1e-3,
+                  overwrite = False, verbose = False, catch_exceptions = False):
     """
     Analyze noise data to produce timestreams and PSDs
 
@@ -164,6 +164,8 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     plot_calq (bool): If True, plots the calibrations
     plot_psdq (bool): If True, plots the PSDs
     plot_timestreamq (bool): If True, plots the timestreams
+    plot_factor (int): for plotting a subset of data. Plots every plot_factor
+        datasets
     deglitch_nstd (float or None): threshold for removing glitched data points
         from the timestream, or None to bypass deglitching. Points more than
         deglitch_nstd times the standard deviations of the theta timestream are
@@ -211,6 +213,9 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         pbar.set_description('noise index')
     data_new = pd.DataFrame([])
     for index in pbar:
+        plot_calq_single = ((index % plot_factor) == 0) and plot_calq
+        plot_psdq_single = ((index % plot_factor) == 0) and plot_psdq
+        plot_timestreamq_single = ((index % plot_factor) == 0) and plot_timestreamq
         prefix = f'Fn{index:02d}_NI{noise_index}'
         iq_fit_row = data[data.dataIndex == index].iloc[0]
         ffine, zfine = ffines[index], zfines[index]
@@ -229,10 +234,13 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
             if index in fcal_indices:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
                     cr_indices, theta_range, poly, xcal_data, figs =\
-                compute_psd(ffine, zfine, None, None, None, fnoise_offres = fnoise,
-                            znoise_offres = znoise, dt_offres = dt, flag_crs = False,
-                            deglitch_nstd = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
-                            plot_timestreamq = plot_timestreamq)
+                compute_psd(ffine, zfine, None, None, None,
+                            fnoise_offres = fnoise, znoise_offres = znoise,
+                            dt_offres = dt, flag_crs = False,
+                            deglitch_nstd = deglitch_nstd,
+                            plot_calq = plot_calq_single,
+                            plot_psdq = plot_psdq_single,
+                            plot_timestreamq = plot_timestreamq_single)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, None, dt,
@@ -240,12 +248,16 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
             else:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
                     cr_indices, theta_range, poly, xcal_data, figs =\
-                compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
-                            znoise_offres = None, dt_offres = None, flag_crs = True,
-                            deglitch_nstd = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
-                            plot_timestreamq = plot_timestreamq, cr_nstd = cr_nstd,
-                            cr_width = cr_width, cr_peak_spacing = cr_peak_spacing,
-                           cr_removal_time = cr_removal_time)
+                compute_psd(ffine, zfine, fnoise, znoise, dt,
+                            fnoise_offres = None, znoise_offres = None,
+                            dt_offres = None, flag_crs = True,
+                            deglitch_nstd = deglitch_nstd,
+                            plot_calq = plot_calq_single,
+                            plot_psdq = plot_psdq_single,
+                            plot_timestreamq = plot_timestreamq_single,
+                            cr_nstd = cr_nstd, cr_width = cr_width,
+                            cr_peak_spacing = cr_peak_spacing,
+                            cr_removal_time = cr_removal_time)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, dt, None,
