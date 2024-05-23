@@ -1,7 +1,7 @@
 from scipy.signal import find_peaks
 import numpy as np
 
-def remove_cosmic_rays(theta, dt, cr_nstd = 5, cr_width = 12,
+def remove_cosmic_rays(theta, tsample, cr_nstd = 5, cr_width = 12,
                        cr_peak_spacing = 100e-6, cr_removal_time = 1e-3):
     """
     Remove cosmic rays from a timestream using a peak finding algorithm.
@@ -11,7 +11,7 @@ def remove_cosmic_rays(theta, dt, cr_nstd = 5, cr_width = 12,
 
     Parameters:
     theta (np.array): theta array with cosmic rays
-    dt (float): sample time of theta array
+    tsample (float): sample time of theta array
     cr_nstd (float): number of standard deviations above the mean for find_peaks
     cr_width (int): width of cosmic rays in number of points
     cr_peak_spacing (float): number of seconds spacing between cosmic rays
@@ -22,15 +22,15 @@ def remove_cosmic_rays(theta, dt, cr_nstd = 5, cr_width = 12,
     theta_rmvd (np.array): theta array with cosmic rays removed
     """
     height = np.mean(-theta) + cr_nstd * np.std(theta)
-    distance = int(cr_peak_spacing / dt)
+    distance = int(cr_peak_spacing / tsample)
     if distance < 1:
         distance = 1
     cr_indices, _ = find_peaks(-theta, width = cr_width,
                                distance = distance,
                                height = height)
-    start_offset = int(200e-6 / dt)
+    start_offset = int(200e-6 / tsample)
     istarts = cr_indices - start_offset
-    i_removal = int(cr_removal_time / dt)
+    i_removal = int(cr_removal_time / tsample)
     iends = istarts + i_removal
     iranges = [[istarts[i], iends[i]] for i in range(len(istarts))]
     # Merge overlapping iranges
