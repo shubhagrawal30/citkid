@@ -1,8 +1,7 @@
 from scipy.signal import find_peaks
 import numpy as np
 
-def remove_cosmic_rays(theta, tsample, cr_nstd = 5, cr_width = 12,
-                       cr_peak_spacing = 100e-6, cr_removal_time = 1e-3):
+def remove_cosmic_rays(x, tsample, cr_nstd = 5, time_constant = 1e-3):
     """
     Remove cosmic rays from a timestream using a peak finding algorithm.
     Flags the cosmic rays and sets the data in the timestream equal to the
@@ -10,25 +9,32 @@ def remove_cosmic_rays(theta, tsample, cr_nstd = 5, cr_width = 12,
     rays, treats the overlap as a single cosmic ray.
 
     Parameters:
-    theta (np.array): theta array with cosmic rays
-    tsample (float): sample time of theta array
-    cr_nstd (float): number of standard deviations above the mean for find_peaks
-    cr_width (int): width of cosmic rays in number of points
-    cr_peak_spacing (float): number of seconds spacing between cosmic rays
-    cr_removal_time (float): number of seconds to remove around each peak
+    x (np.array): timestream with cosmic rays
+    tsample (float): sample time of x array
+    cr_nstd (float): standard deviation threshold for peak finding
+    time_constant(float): cosmic ray decay time constant in seconds
 
     Returns:
     cr_indices (np.array): array of indices at which cosmic rays were found
-    theta_rmvd (np.array): theta array with cosmic rays removed
+    x_rmvd (np.array): timestream with cosmic rays removed
     """
-    height = np.mean(-theta) + cr_nstd * np.std(theta)
+    # Create cr removal parameters from detector time constant
+    cr_width_time = time_constant # minimum width of cosmic ray hit
+    cr_peak_spacing = time_constant # minimum spacing between peaks
+    cr_removal_time = time_constant * 20 # time to remove around peaks
+    cr_width = int(cr_width_time / tsample)
+    if cr_width < 1:
+        cr_width = 1
+    height = np.mean(-x) + cr_nstd * np.std(x)
     distance = int(cr_peak_spacing / tsample)
     if distance < 1:
         distance = 1
-    cr_indices, _ = find_peaks(-theta, width = cr_width,
+    # find cosmic rays
+    cr_indices, _ = find_peaks(-x, width = cr_width,
                                distance = distance,
                                height = height)
-    start_offset = int(200e-6 / tsample)
+    # remove cosmic rays
+    start_offset = int(time_constant / 4 / tsample)
     istarts = cr_indices - start_offset
     i_removal = int(cr_removal_time / tsample)
     iends = istarts + i_removal
@@ -39,10 +45,10 @@ def remove_cosmic_rays(theta, tsample, cr_nstd = 5, cr_width = 12,
     for index, ir in enumerate(iranges):
         if ir[0] < 0:
             iranges[index][0] = 0
-        if ir[1] >= len(theta):
-            iranges[index][1] = len(theta) - 1
+        if ir[1] >= len(x):
+            iranges[index][1] = len(x) - 1
     # Average data before and after iranges
-    theta_rmvd = theta.copy()
+    x_rmvd = x.copy()
     for irange in iranges:
         # determine indices of data before and after the data to cut
         ilen = irange[1] - irange[0]
@@ -50,19 +56,19 @@ def remove_cosmic_rays(theta, tsample, cr_nstd = 5, cr_width = 12,
         iaft = [irange[1], irange[1] + ilen]
         if ibef[0] < 0:
             ibef[0] = 0
-        if iaft[1] > len(theta):
-            iaft[1] = len(theta)
-        # Make theta_bef and theta_aft arrays
-        theta_bef = theta[ibef[0]: ibef[1]]
-        theta_aft = theta[iaft[0]: iaft[1]]
-        length_diff = len(theta_aft) - len(theta_bef)
+        if iaft[1] > len(x):
+            iaft[1] = len(x)
+        # Make x_bef and x_aft arrays
+        x_bef = x[ibef[0]: ibef[1]]
+        x_aft = x[iaft[0]: iaft[1]]
+        length_diff = len(x_aft) - len(x_bef)
         if length_diff > 0: # data before is too short
-            theta_bef = np.concatenate([theta_bef, theta_aft[:length_diff]])
+            x_bef = np.concatenate([x_bef, x_aft[:length_diff]])
         elif length_diff < 0: # data before is too short
-            theta_aft = np.concatenate([theta_aft, theta_bef[:-length_diff]])
-        theta_rmvd[irange[0]: irange[1]] = np.mean([theta_bef, theta_aft],
+            x_aft = np.concatenate([x_aft, x_bef[:-length_diff]])
+        x_rmvd[irange[0]: irange[1]] = np.mean([x_bef, x_aft],
                                                     axis = 0)
-    return cr_indices, theta_rmvd
+    return cr_indices, x_rmvd
 
 ################################################################################
 ######################### Utility functions ####################################
