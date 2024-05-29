@@ -31,7 +31,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
     rough_bw (float): rough sweep bandwidth in MHz
     take_rough_sweep (bool): if True, first takes a rough sweep and optimizes
         the tone frequencies
-    fres_update_method (str): method for updating the tone frequencies. 'minS21'
+    fres_update_method (str): method for updating the tone frequencies. 'mins21'
         for the minimum of |S21|, 'distance' for the point of furthest distance
         in IQ space from the off-resonance point, or 'spacing' for the point
         of largest spacing in IQ space
