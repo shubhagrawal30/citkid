@@ -17,7 +17,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature,
            resonator_indices = None,
            extra_fitdata_values = {}, plotq = False, plot_factor = 1,
-           overwrite = False, verbose = True):
+           overwrite = False, verbose = True, catch_exceptions = False):
     """
     Fits all IQ loops in a target scan
 
@@ -46,6 +46,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     overwrite (bool): if not True, raises an exception if the output data file
         already exists
     verbose (bool): If True, displays a progress bar as data is taken
+    catch_exceptions (bool): If True, catches any exceptions that occur while
+        fitting and proceeds
 
     Returns:
     data (pd.DataFrame): DataFrame of fit data
@@ -103,25 +105,30 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
             plot_path = fit_plot_directory + file_prefix + '_fit.png'
         else:
             plot_path = ''
-        if resonator_index not in fcal_indices:
-            # For on-resonance, fit IQ loops
-            fitrow, fig = \
-                fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, fres,
-                                           Qres, plotq = plotq_single,
-                                           return_dataframe = True)
-            fitrow['plotpath'] = plot_path
-        else:
-            # for off-resonance, just fit gain
-            p_amp, p_phase, z_rmvd, (fig, axs) = \
-                fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, fres,
-                                          Qres, plotq = plotq_single)
-            p = [np.nan] * 7
-            res = np.nan
-            fitrow = make_fit_row(p_amp, p_phase, p, p, p, res,
-                                  plot_path = plot_path)
-        if not fig is None:
-            save_fig(fig, file_prefix + '_fit', fit_plot_directory)
-            plt.close(fig)
+        try:
+            if resonator_index not in fcal_indices:
+                # For on-resonance, fit IQ loops
+                fitrow, fig = \
+                    fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, fres,
+                                               Qres, plotq = plotq_single,
+                                               return_dataframe = True)
+                fitrow['plotpath'] = plot_path
+            else:
+                # for off-resonance, just fit gain
+                p_amp, p_phase, z_rmvd, (fig, axs) = \
+                    fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, fres,
+                                              Qres, plotq = plotq_single)
+                p = [np.nan] * 7
+                res = np.nan
+                fitrow = make_fit_row(p_amp, p_phase, p, p, p, res,
+                                      plot_path = plot_path)
+            if not fig is None:
+                save_fig(fig, file_prefix + '_fit', fit_plot_directory)
+                plt.close(fig)
+        except Exception as e:
+            if not catch_exceptions:
+                raise e
+            fitrow = pd.Series([], dtype = 'object')
         fitrow['resonatorIndex'] = resonator_index
         fitrow['dataIndex'] = pbar_index
         fitrow['f0'] = np.mean(ffine) # Mean of ffine is the noise frequency
