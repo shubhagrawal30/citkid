@@ -69,17 +69,26 @@ def generate_resonance_parameters():
     random_log = lambda low, high: np.exp(np.random.uniform(np.log(low),
                                                             np.log(high)))
     fr  = random(0.4e9, 2.4e9)
-    Qr  = random(1e3, 500e3)
-    amp = random(1e-5, 1 - 1e-5)
-    phi = random(-np.pi / 2, np.pi / 2)
-    a   = random_log(1e-5, 0.8)
-    p_amp  = np.array([random(-5e-17, 5e-17), random(-8e-5, 8e-5),
-                       random(-150, 20)])
-    p_phase = np.array([-random_log(1e-9, 1e-6), random(-1e3, 1e3)])
+    # Qr  = random(1e3, 500e3)
+    Qr  = random(20e3, 60e3)
+    # amp = random(1e-5, 1 - 1e-5)
+    amp = random(0.8, 0.99)
+    # phi = random(-np.pi / 2, np.pi / 2)
+    phi = random(-np.pi / 16, np.pi / 16)
+    # a   = random_log(1e-5, 0.8)
+    a = random_log(1e-2, 0.6)
+    # p_amp  = np.array([random(-5e-17, 5e-17), random(-8e-5, 8e-5),
+                       # random(-150, 20)])
+    p_amp  = np.array([random(-5e-21, 5e-21), random(-8e-8, 8e-8),
+                       random(-120, 20)])
+    # p_phase = np.array([-random_log(1e-9, 1e-6), random(-1e3, 1e3)])
+    p_phase = np.array([-random_log(1e-9, 1e-8), random(-1, 1)])
     fwhm = fr / Qr
     fine_bw = random(fwhm * 3, fwhm * 6)
-    f_noise_std = random(1, 500)
-    a_noise_std = random(1e-5, 3e-3)
+    # f_noise_std = random(1, 500)
+    f_noise_std = random(1, 100)
+    # a_noise_std = random(1e-5, 3e-3)
+    a_noise_std = random(1e-5, 1e-3)
     return fr, Qr, amp, phi, a, p_amp, p_phase, fine_bw, f_noise_std, a_noise_std
 
 @jit(nopython=True)
