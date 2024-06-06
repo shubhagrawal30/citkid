@@ -31,4 +31,4 @@ def pca(y, n_components = 5):
     z = ((z_normalized.T * std_dev) + mean).T
     # Get eigenvalues
     eigenvalues = (U * S).T * std_dev + mean
-    return z, eigenvectors, eigenvalues
+    return z

@@ -31,6 +31,9 @@ def make_fit_row(p_amp, p_phase, p0, popt, perr, res, plot_path = '',
         row[prefix + key + '_guess'] = pi
     for key, pi in zip(nonlinear_iq_names, popt):
         row[prefix + key] = pi
+    qc, qi = calc_Qc_Qi(popt[1], popt[2])
+    row[prefix + 'Qc'] = qc
+    row[prefix + 'Qi'] = qi
     for key, pi in zip(nonlinear_iq_names, perr):
         row[prefix + key + '_err'] = pi
     for i, pi in enumerate(p_amp):
