@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from .util import calc_qc_qi
 nonlinear_iq_names = ['fr', 'Qr', 'amp', 'phi', 'a', 'i0', 'q0', 'tau']
 nonlinear_iq_labels = [r'$f_r$', r'$Q_r$', r'$Q_r / Q_c$', r'$\phi$', r'$a$',
                          r'$i_0$', r'$q_0$', r'$\tau$']
@@ -31,7 +32,7 @@ def make_fit_row(p_amp, p_phase, p0, popt, perr, res, plot_path = '',
         row[prefix + key + '_guess'] = pi
     for key, pi in zip(nonlinear_iq_names, popt):
         row[prefix + key] = pi
-    qc, qi = calc_Qc_Qi(popt[1], popt[2])
+    qc, qi = calc_qc_qi(popt[1], popt[2])
     row[prefix + 'Qc'] = qc
     row[prefix + 'Qi'] = qi
     for key, pi in zip(nonlinear_iq_names, perr):
