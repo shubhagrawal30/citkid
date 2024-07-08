@@ -30,11 +30,12 @@ def fr_vs_temp(temperature, fr0, D, alpha, Tc, gamma = 1):
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
     zeta = Delta0 / kT
-    xi = h * fr0 / kT
+    xi = h * fr0 / (2 * kT)
 
-    g_tls = np.real(digamma(1/2 + 1j * xi / np.pi) - np.log(xi / np.pi)) / np.pi
+    g_tls = (np.real(digamma(1/2 + 1j * xi / np.pi)) - np.log(2 * xi)) / np.pi
+    # There may be a factor of 1 / 2pi in the log. Sources are inconsistent
     g_mb = np.sqrt(2 * np.pi / zeta) + 2 * np.exp(-xi) * I_n(0, xi)
-    g_mb = - g_mb * np.exp(-zeta) / 4
+    g_mb = - g_mb * np.exp(-zeta) / 2
     fr = fr0 * (1 + D * g_tls + alpha * gamma * g_mb)
     return fr
 
@@ -66,7 +67,7 @@ def Q_vs_temp(temperature, fr0, D, alpha, Tc, A, B, m, n, delta_z,
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
     zeta = Delta0 / kT
-    xi = h * fr0 / kT
+    xi = h * fr0 / (2 * kT)
 
     num = D * np.tanh(xi)
     den0 = A * np.tanh(xi) ** 2 / (1 + B * np.tanh(xi) * temperature ** m)
@@ -107,10 +108,10 @@ def fr_vs_temp_notls(temperature, fr0, alpha, Tc, gamma = 1):
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
     zeta = Delta0 / kT
-    xi = h * fr0 / kT
+    xi = h * fr0 / (2 * kT)
 
     g_mb = np.sqrt(2 * np.pi / zeta) + 2 * np.exp(-xi) * I_n(0, xi)
-    g_mb = - g_mb * np.exp(-zeta) / 4
+    g_mb = - g_mb * np.exp(-zeta) / 2
     fr = fr0 * (1 + alpha * gamma * g_mb)
     return fr
 
@@ -139,7 +140,7 @@ def Q_vs_temp_notls(temperature, fr0, alpha, Tc, delta_z,
     kT = k_B * temperature
     Delta0 = 1.762 * k_B * Tc
     zeta = Delta0 / kT
-    xi = h * fr0 / kT
+    xi = h * fr0 / (2 * kT)
 
     omega = 2 * np.pi * fr0
     # T << Tc approximation for the thermal quasiparticle density
@@ -168,9 +169,10 @@ def fr_vs_temp_tls(temperature, fr0, D):
         temperature(s)
     """
     kT = k_B * temperature
-    xi = h * fr0 / kT
+    xi = h * fr0 / (2 * kT)
 
-    g_tls = np.real(digamma(1/2 + 1j * xi / np.pi) - np.log(xi / np.pi)) / np.pi
+    g_tls = (np.real(digamma(1/2 + 1j * xi / np.pi)) - np.log(2 * xi)) / np.pi
+    # There may be a factor of 1 / 2pi in the log. Sources are inconsistent
     fr = fr0 * (1 + D * g_tls)
     return fr
 
@@ -194,7 +196,7 @@ def Q_vs_temp_tls(temperature, fr0, D, A, B, m, n, delta_z):
     Q (float or array-like): quality factor(s) at the given temperature(s)
     """
     kT = k_B * temperature
-    xi = h * fr0 / kT
+    xi = h * fr0 / (2 * kT)
 
     num = D * np.tanh(xi)
     den0 = A * np.tanh(xi) ** 2 / (1 + B * np.tanh(xi) * temperature ** m)

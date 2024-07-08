@@ -1,8 +1,9 @@
 ### Generate random resonance data
 import numpy as np
 from numba import jit, vectorize
+from scipy import signal
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1):
     """
     Generates random resonance data. Assumes resonance frequencies were found
@@ -15,10 +16,10 @@ def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1):
         noise, or raise for higher noise
 
     Returns:
-    ffine (np.array): fine-sweep frequency data in Hz
-    zfine (np.array): fine-sweep complex S21 data
-    fgain (np.array): gain-sweep frequency data in Hz
-    zgain (np.array): gain-sweep complex S21 data
+    ffine (np.array): fine sweep frequency data in Hz
+    zfine (np.array): fine sweep complex S21 data
+    fgain (np.array): gain sweep frequency data in Hz
+    zgain (np.array): gain sweep complex S21 data
     """
     fr, Qr, amp, phi, a, p_amp, p_phase, fine_bw, f_noise_std, a_noise_std =\
                                                  generate_resonance_parameters()
@@ -40,7 +41,9 @@ def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1):
     f_noisy = fgain + np.random.normal(0, f_noise_std, len(fgain))
     zgain = nonlinear_iq_simple(f_noisy, fr, Qr, amp, phi, a, p_amp, p_phase)
     zgain *= np.random.normal(1, a_noise_std, len(zgain))
-    return ffine, zfine, fgain, zgain
+    # Noise data
+    znoise = generate_timestream(f0, fr, Qr, amp, phi, a, p_amp, p_phase)
+    return ffine, zfine, fgain, zgain, f0, znoise
 
 @jit(nopython=True)
 def generate_resonance_parameters():
@@ -58,7 +61,7 @@ def generate_resonance_parameters():
         a = 4 * sqrt(3) / 9 ~ 0.77.  Sometimes referred to as a_nl
     p_amp (array-like): gain polynomial coefficients
     p_phase (array-like): phase polynomial coefficients
-    fine_bw (float): fine-scan bandwidth in Hz
+    fine_bw (float): fine sweep bandwidth in Hz
     f_noise_std (float): frequency noise standard deviation
     a_noise_std (float): amplitude noise standard deviation
     """
@@ -66,16 +69,26 @@ def generate_resonance_parameters():
     random_log = lambda low, high: np.exp(np.random.uniform(np.log(low),
                                                             np.log(high)))
     fr  = random(0.4e9, 2.4e9)
-    Qr  = random(1e3, 500e3)
-    amp = random(1e-5, 1 - 1e-5)
-    phi = random(-np.pi / 2, np.pi / 2)
-    a   = random_log(1e-5, 0.8)
-    p_amp  = [random(-5e-17, 5e-17), random(-8e-5, 8e-5), random(-150, 20)]
-    p_phase = [-random_log(1e-9, 1e-6), random(-1e3, 1e3)]
+    # Qr  = random(1e3, 500e3)
+    Qr  = random(20e3, 60e3)
+    # amp = random(1e-5, 1 - 1e-5)
+    amp = random(0.8, 0.99)
+    # phi = random(-np.pi / 2, np.pi / 2)
+    phi = random(-np.pi / 16, np.pi / 16)
+    # a   = random_log(1e-5, 0.8)
+    a = random_log(1e-2, 0.6)
+    # p_amp  = np.array([random(-5e-17, 5e-17), random(-8e-5, 8e-5),
+                       # random(-150, 20)])
+    p_amp  = np.array([random(-5e-21, 5e-21), random(-8e-8, 8e-8),
+                       random(-120, 20)])
+    # p_phase = np.array([-random_log(1e-9, 1e-6), random(-1e3, 1e3)])
+    p_phase = np.array([-random_log(1e-9, 1e-8), random(-1, 1)])
     fwhm = fr / Qr
     fine_bw = random(fwhm * 3, fwhm * 6)
-    f_noise_std = random(1, 500)
-    a_noise_std = random(1e-5, 3e-3)
+    # f_noise_std = random(1, 500)
+    f_noise_std = random(1, 100)
+    # a_noise_std = random(1e-5, 3e-3)
+    a_noise_std = random(1e-5, 1e-3)
     return fr, Qr, amp, phi, a, p_amp, p_phase, fine_bw, f_noise_std, a_noise_std
 
 @jit(nopython=True)
@@ -232,3 +245,89 @@ def polyval(p, x):
     for i in range(len(p)):
         y = x * y + p[i]
     return y
+
+################################################################################
+########################### Noise timestream ###################################
+################################################################################
+def generate_timestream(fnoise, fr, Qr, amp, phi, a, p_amp, p_phase):
+    """
+    Generates a raw IQ time stream, purely noise
+
+    Parameters:
+    fnoise (float): streaming frequency in Hz
+    fr (float): resonance frequency in Hz
+    Qr (float): total quality factor
+    amp (float): Qr / Qc, where Qc is the coupling quality factor
+    phi (float): rotation parameter for impedance mismatch between KID and
+        readout circuit
+    a (float): nonlinearity parameter. Bifurcation occurs at
+        a = 4 * sqrt(3) / 9 ~ 0.77.  Sometimes referred to as a_nl
+    p_amp (array-like): gain polynomial coefficients
+    p_phase (array-like): phase polynomial coefficients
+
+    Returns:
+    z (np.array): IQ time series complex S21 data
+    """
+    # Sampling parameters
+    fsample = 10000 # sampling frequency [Hz]
+    tlen = 100 # time stream length [s]
+    # Sxx white and 1/f noise parameters
+    sxx_white = 2e-17 # white noise term [1/Hz]
+    fknee = 1 # knee of 1/f component [Hz]
+    # Cosmic-ray events
+    cr_peak_dx_vec = -1*np.array([1e-4, 2e-5])
+    cr_t0_vec = np.array([0.23, 0.58])*tlen
+    # Roll-off tau
+    tau_qp = 0.001 # qp lifetime [s]
+    # Amplifier white and 1/f noise parameters
+    spar_sper = 10 # Ratio of Spar/Sper
+    fknee_amp = 1 # knee of amplifier noise term [1/Hz]
+    #
+    # Create white noise plus 1/f
+    sig_white = np.sqrt(sxx_white*fsample/2)
+    dx_noise = np.random.normal(0, sig_white, fsample*tlen)
+    steps = np.random.choice([-1, 1], size=fsample*tlen)
+    position = np.cumsum(steps)
+    position = position*4*sig_white*fknee/fsample
+    dx_noise += position
+    #
+    # Add some cosmic ray events
+    dx_cr = np.ones(fsample*tlen)*0
+    for ii in range(len(cr_t0_vec)):
+        t0 = cr_t0_vec[ii]
+        cr_peak_dx = cr_peak_dx_vec[ii]
+        tvec = np.linspace(0, fsample*tlen-1, fsample*tlen)/fsample
+        xvec = np.heaviside(tvec-t0, 1)
+        indx = np.where(xvec > 0)
+        xvec[indx] = cr_peak_dx*np.exp(-1*(tvec[indx]-t0)/tau_qp)
+        dx_cr += xvec
+#    Qr_vec = 1/(1/Qr - dx_cr/20)
+#    amp_vec = Qr_vec/Qr*amp
+#    print(np.min(Qr_vec), np.max(Qr_vec))
+#    print(np.min(amp_vec), np.max(amp_vec))
+    dx_noise += dx_cr
+    #
+    # Multiply by a low-pass filter
+    sos = signal.butter(1, 1/(6*tau_qp), 'lp', fs=fsample, output='sos')
+    dx_noise = signal.sosfilt(sos, dx_noise)
+    df_noise = fr*dx_noise
+    # Convert df to S21
+    f = fnoise - df_noise
+    z = nonlinear_iq_simple(f, fr, Qr, amp, phi, a, p_amp, p_phase)
+    #
+    # Add white amplifier noise plus 1/f
+    ftest = fnoise*(1 + np.array([0, sig_white]))
+    ztest = nonlinear_iq_simple(ftest, fr, Qr, amp, phi, a, p_amp, p_phase)
+    sigma_s21 = np.abs(ztest[1] - ztest[0])/np.sqrt(spar_sper)
+    z1 = np.random.normal(0, sigma_s21, fsample*tlen)
+    steps = np.random.choice([-1, 1], size=fsample*tlen)
+    position = np.cumsum(steps)
+    position = position*4*sigma_s21*fknee_amp/fsample
+    z1 += position
+    z2 = np.random.normal(0, sigma_s21, fsample*tlen)
+    steps = np.random.choice([-1, 1], size=fsample*tlen)
+    position = np.cumsum(steps)
+    position = position*4*sigma_s21*fknee_amp/fsample
+    z2 += position
+    z += z1 + 1.j*z2
+    return z

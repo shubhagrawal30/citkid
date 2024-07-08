@@ -17,13 +17,13 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature,
            resonator_indices = None,
            extra_fitdata_values = {}, plotq = False, plot_factor = 1,
-           overwrite = False, verbose = True):
+           overwrite = False, verbose = True, catch_exceptions = False):
     """
     Fits all IQ loops in a target scan
 
     Parameters:
     directory (str): directory containing the data for logging
-    out_directory (str or None): directory to save the plots and data, or 
+    out_directory (str or None): directory to save the plots and data, or
         None to bypass saving data
     file_suffix (str): suffix of saved files
     power_number (int): power index for logging
@@ -46,6 +46,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     overwrite (bool): if not True, raises an exception if the output data file
         already exists
     verbose (bool): If True, displays a progress bar as data is taken
+    catch_exceptions (bool): If True, catches any exceptions that occur while
+        fitting and proceeds
 
     Returns:
     data (pd.DataFrame): DataFrame of fit data
@@ -103,25 +105,30 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
             plot_path = fit_plot_directory + file_prefix + '_fit.png'
         else:
             plot_path = ''
-        if resonator_index not in fcal_indices:
-            # For on-resonance, fit IQ loops
-            fitrow, fig = \
-                fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, fres,
-                                           Qres, plotq = plotq_single,
-                                           return_dataframe = True)
-            fitrow['plotpath'] = plot_path
-        else:
-            # for off-resonance, just fit gain
-            p_amp, p_phase, z_rmvd, (fig, axs) = \
-                fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, fres,
-                                          Qres, plotq = plotq_single)
-            p = [np.nan] * 7
-            res = np.nan
-            fitrow = make_fit_row(p_amp, p_phase, p, p, p, res,
-                                  plot_path = plot_path)
-        if not fig is None:
-            save_fig(fig, file_prefix + '_fit', fit_plot_directory)
-            plt.close(fig)
+        try:
+            if resonator_index not in fcal_indices:
+                # For on-resonance, fit IQ loops
+                fitrow, fig = \
+                    fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, fres,
+                                               Qres, plotq = plotq_single,
+                                               return_dataframe = True)
+                fitrow['plotpath'] = plot_path
+            else:
+                # for off-resonance, just fit gain
+                p_amp, p_phase, z_rmvd, (fig, axs) = \
+                    fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, fres,
+                                              Qres, plotq = plotq_single)
+                p = [np.nan] * 7
+                res = np.nan
+                fitrow = make_fit_row(p_amp, p_phase, p, p, p, res,
+                                      plot_path = plot_path)
+            if not fig is None:
+                save_fig(fig, file_prefix + '_fit', fit_plot_directory)
+                plt.close(fig)
+        except Exception as e:
+            if not catch_exceptions:
+                raise e
+            fitrow = pd.Series([], dtype = 'object')
         fitrow['resonatorIndex'] = resonator_index
         fitrow['dataIndex'] = pbar_index
         fitrow['f0'] = np.mean(ffine) # Mean of ffine is the noise frequency
@@ -147,10 +154,10 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
 
 def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   plot_calq = False, plot_psdq = False,
-                  plot_timestreamq = False, deglitch_nstd = 10, cr_nstd = 5,
-                  cr_width = 1, cr_peak_spacing = 100e-6,
-                  cr_removal_time = 1e-3, overwrite = False, verbose = False,
-                  catch_exceptions = False):
+                  plot_timestreamq = False, plot_factor = 1,
+                  deglitch_nstd = 10, cr_nstd = 5, cr_width = 1,
+                  cr_peak_spacing = 100e-6, cr_removal_time = 1e-3,
+                  overwrite = False, verbose = False, catch_exceptions = False):
     """
     Analyze noise data to produce timestreams and PSDs
 
@@ -164,9 +171,11 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     plot_calq (bool): If True, plots the calibrations
     plot_psdq (bool): If True, plots the PSDs
     plot_timestreamq (bool): If True, plots the timestreams
+    plot_factor (int): for plotting a subset of data. Plots every plot_factor
+        datasets
     deglitch_nstd (float or None): threshold for removing glitched data points
         from the timestream, or None to bypass deglitching. Points more than
-        deglitch times the standard deviations of the theta timestream are
+        deglitch_nstd times the standard deviations of the theta timestream are
         removed from the data.
     cr_nstd (float): number of standard deviations above the mean for find_peaks
     cr_width (int): width of cosmic rays in number of points
@@ -211,6 +220,9 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         pbar.set_description('noise index')
     data_new = pd.DataFrame([])
     for index in pbar:
+        plot_calq_single = ((index % plot_factor) == 0) and plot_calq
+        plot_psdq_single = ((index % plot_factor) == 0) and plot_psdq
+        plot_timestreamq_single = ((index % plot_factor) == 0) and plot_timestreamq
         prefix = f'Fn{index:02d}_NI{noise_index}'
         iq_fit_row = data[data.dataIndex == index].iloc[0]
         ffine, zfine = ffines[index], zfines[index]
@@ -229,10 +241,13 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
             if index in fcal_indices:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
                     cr_indices, theta_range, poly, xcal_data, figs =\
-                compute_psd(ffine, zfine, None, None, None, fnoise_offres = fnoise,
-                            znoise_offres = znoise, dt_offres = dt, flag_crs = False,
-                            deglitch = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
-                            plot_timestreamq = plot_timestreamq)
+                compute_psd(ffine, zfine, None, None, None,
+                            fnoise_offres = fnoise, znoise_offres = znoise,
+                            dt_offres = dt, flag_crs = False,
+                            deglitch_nstd = deglitch_nstd,
+                            plot_calq = plot_calq_single,
+                            plot_psdq = plot_psdq_single,
+                            plot_timestreamq = plot_timestreamq_single)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, None, dt,
@@ -240,12 +255,16 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
             else:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
                     cr_indices, theta_range, poly, xcal_data, figs =\
-                compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
-                            znoise_offres = None, dt_offres = None, flag_crs = True,
-                            deglitch = deglitch_nstd, plot_calq = plot_calq, plot_psdq = plot_psdq,
-                            plot_timestreamq = plot_timestreamq, cr_nstd = cr_nstd,
-                            cr_width = cr_width, cr_peak_spacing = cr_peak_spacing,
-                           cr_removal_time = cr_removal_time)
+                compute_psd(ffine, zfine, fnoise, znoise, dt,
+                            fnoise_offres = None, znoise_offres = None,
+                            dt_offres = None, flag_crs = True,
+                            deglitch_nstd = deglitch_nstd,
+                            plot_calq = plot_calq_single,
+                            plot_psdq = plot_psdq_single,
+                            plot_timestreamq = plot_timestreamq_single,
+                            cr_nstd = cr_nstd, cr_width = cr_width,
+                            cr_peak_spacing = cr_peak_spacing,
+                            cr_removal_time = cr_removal_time)
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, dt, None,

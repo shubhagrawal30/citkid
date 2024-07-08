@@ -35,7 +35,7 @@ def update_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
             fres.append(np.mean(fi))
         return np.array(fres)
     elif method == 'mins21':
-        update = update_fr_mins21
+        update = update_fr_minS21
     elif method == 'spacing':
         update = update_fr_spacing
     elif method == 'distance':

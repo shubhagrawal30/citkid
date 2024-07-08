@@ -3,7 +3,7 @@ from numba import jit, vectorize
 from scipy import stats
 from scipy import signal
 
-def calc_qc_qi(qr, amp, phi):
+def calc_qc_qi(qr, amp):
     """
     Calculates Qc and Qi from Qr and amp, where amp = Qr / Qc and
     1 / Qr = 1 / Qc + 1 / Qi
@@ -11,7 +11,6 @@ def calc_qc_qi(qr, amp, phi):
     Parameters:
     qr (float): total quality factor
     amp (float): Qr / Qc
-    phi (float): impedance mismatch angle
 
     Returns:
     qc (float): coupling quality factor
@@ -39,7 +38,7 @@ def bounds_check(p0, bounds):
         if b1 > b2:
             bounds[0][i] = b2
             bounds[1][i] = b1
-    # Make sure p0 is within bounds 
+    # Make sure p0 is within bounds
     lower_bounds = []
     upper_bounds = []
     for p, lb, ub in zip(p0, bounds[0], bounds[1]):

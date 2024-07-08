@@ -58,7 +58,7 @@ def fit_gain(f, z, fr_spans, plotq = False):
 
     Parameters:
     f <np.array>: gain frequency array
-    z <np.array>: gain complex D21 array
+    z <np.array>: gain complex S21 array
     fr_spans (list): values are tuples (<float>,<float>) where the first value
         is the resonance frequency and the second is the span. These frequencies
         are removed from the gain data

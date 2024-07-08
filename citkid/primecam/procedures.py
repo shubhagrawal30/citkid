@@ -31,7 +31,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
     rough_bw (float): rough sweep bandwidth in MHz
     take_rough_sweep (bool): if True, first takes a rough sweep and optimizes
         the tone frequencies
-    fres_update_method (str): method for updating the tone frequencies. 'minS21'
+    fres_update_method (str): method for updating the tone frequencies. 'mins21'
         for the minimum of |S21|, 'distance' for the point of furthest distance
         in IQ space from the off-resonance point, or 'spacing' for the point
         of largest spacing in IQ space
@@ -137,9 +137,9 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         fit_iq(rfsoc.out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False)
         a_nl = np.array(data.sort_values('resonatorIndex').iq_a, dtype = float)
         if len(a_nls):
-            a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan] 
+            a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan]
         else:
-            a_nl[a_nl == np.nan] = 2 
+            a_nl[a_nl == np.nan] = 2
         a_nls.append(a_nl)
         np.save(rfsoc.out_directory + f'a_nl_{file_suffix}.npy', a_nl)
         if plot_directory is not None:
@@ -171,26 +171,55 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
 ################################################################################
 ######################### Utility functions ####################################
 ################################################################################
-def make_cal_tones(fres, ares, Qres, max_n_tones = 1000):
+def make_cal_tones(fres, ares, Qres, max_n_tones = 1000,
+                   resonator_indices = None,
+                   new_resonator_indices_start = None):
     '''
     Adds calibration tones to the given resonator list. Fills in largest spaces
-    between resonators, up to max_n_tones
+    between resonators, up to max_n_tones. If resonator_indices is provides,
+    also creates a new list of resonator indices where the new calibration
+    tones are labelled by sequential indices starting at
+    new_resonator_indices_start if provided, or the length of the array if not
 
     Parameters:
     fres, ares, Qres (np.array): frequency, amplitude, and Q arrays
     max_n_tones (int): maximum number of tones
+    resonator_indices (array-like or None): resonator indices corresponding to
+        fres
+    new_resonator_indices_start (int or None): first index of the new resonator
+        index labels, or None to start from the end of the array
 
     Returns:
     fres, ares, Qres (np.array): frequency, amplitude, and Q arrays with
         calibration tones added
     fcal_indices (np.array): calibration tone indices
+    new_resonator_indices (np.array): new resonator index list with the new
+        calibration tones labelled sequentially starting at
+        new_resonator_indices_start if provided, or the length of the array if
+        not
     '''
-    Qres = [float(Q) for Q in Qres]
+    fres = np.asarray(fres, dtype = float)
+    ares = np.asarray(ares, dtype = float)
+    Qres = np.asarray(Qres, dtype = float)
+    ix = np.argsort(fres)
+    fres, ares, Qres = fres[ix], ares[ix], Qres[ix]
+
+    if resonator_indices is not None and len(resonator_indices) != len(fres):
+        raise ValueError('resonator_indices must be the same length as fres')
+    if resonator_indices is None:
+        resonator_indices = np.asarray(range(len(fres)))
+    new_resonator_indices = np.asarray(resonator_indices, dtype = int)
+    if new_resonator_indices_start is None:
+        new_resonator_indices_start = max(resonator_indices) + 1
+
     ix = np.flip(np.argsort(np.diff(fres)))[:max_n_tones - len(fres)]
     fcal = np.sort([np.mean(fres[i:i+2]) for i in ix])
-    fres = np.sort(np.concatenate([fres, fcal]))
-    fcal_indices = [np.where(abs(fres - fcali) < 1)[0][0] for fcali in fcal]
-    for ix in fcal_indices:
-        ares = np.insert(ares, ix, 260)
-        Qres = np.insert(Qres, ix, np.inf)
-    return fres, ares, Qres, fcal_indices
+    fcal_indices = np.searchsorted(fres, fcal)
+    fcal_indices += np.asarray(range(len(fcal_indices)), dtype = int)
+    for fcal_index, fres_index in enumerate(fcal_indices):
+        fres = np.insert(fres, fres_index, fcal[fcal_index])
+        ares = np.insert(ares, fres_index, 260)
+        Qres = np.insert(Qres, fres_index, np.inf)
+        new_index = new_resonator_indices_start + fcal_index
+        new_resonator_indices = np.insert(new_resonator_indices, fres_index, new_index)
+    return fres, ares, Qres, fcal_indices, new_resonator_indices

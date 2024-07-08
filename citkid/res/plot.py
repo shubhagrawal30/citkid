@@ -82,9 +82,9 @@ def plot_gain_fit(f0, dB0, f, dB, phase, p_amp, p_phase):
     fmean = np.mean(f0)
     fig, axs = plt.subplots(1, 2, figsize=[6, 2.8], dpi = 200, layout = 'tight')
     axs[1].set_ylabel('Phase')
-    axs[1].set_xlabel(f'(f - {round(fmean / 1e9, 4)} MHz) (kHz)')
+    axs[1].set_xlabel(f'(f - {round(fmean / 1e9, 4)} GHz) (kHz)')
     axs[0].set_ylabel('|S21| (dB)')
-    axs[0].set_xlabel(f'(f - {round(fmean / 1e9, 4)} MHz) (kHz)')
+    axs[0].set_xlabel(f'(f - {round(fmean / 1e9, 4)} GHz) (kHz)')
 
     color = plt.cm.viridis(0.1)
     color0 = plt.cm.viridis(0.99)

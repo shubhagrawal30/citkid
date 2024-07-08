@@ -51,12 +51,26 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
         ax.plot([np.real(origin), np.real(r2)],
                 [np.imag(origin), np.imag(r2)], '--', color = color0)
         # theta -> x calibration
-        ix = (theta_fine < max(theta) + np.pi / 8)
-        ix = ix & (theta_fine > min(theta) - np.pi / 8)
-        theta_samp = np.linspace(min(theta_fine[ix]), max(theta_fine[ix]), 200)
+        ix = np.argsort(theta_fine)
+        theta_fine, ffine = theta_fine[ix], ffine[ix]
+        ix0 = np.where(theta_fine > min(theta))[0]
+        if len(ix0):
+            ix0 = min(ix0) - 3
+            if ix0 < 0:
+                ix0 = 0
+        else:
+            ix0 = 0
+        ix1 = np.where(theta_fine < max(theta))[0]
+        if len(ix1):
+            ix1 = max(ix1) + 3
+            if ix1 > len(theta_fine):
+                ix1 = len(theta_fine)
+        else:
+            ix1 = len(theta_fine)
+        theta_samp = np.linspace(min(theta_fine[ix0:ix1]), max(theta_fine[ix0:ix1]), 200)
         ax2.plot(theta_samp, (1 - np.polyval(poly, theta_samp) / fnoise) * 1e6,
                  '-k')
-        ax2.plot(theta_fine[ix], (1 - ffine[ix] / fnoise) * 1e6, '.',
+        ax2.plot(theta_fine[ix0:ix1], (1 - ffine[ix0:ix1] / fnoise) * 1e6, '.',
                   color = 'r')
         ax2.plot(theta[::nevery],
                  (1 - np.polyval(poly, theta[::nevery]) / fnoise) * 1e6, '.',
