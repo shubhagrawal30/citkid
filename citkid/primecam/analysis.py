@@ -155,7 +155,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
 def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   plot_calq = False, plot_psdq = False,
                   plot_timestreamq = False, plot_factor = 1,
-                  deglitch_nstd = 10, cr_nstd = 5, cr_width = 1,
+                  deglitch_nstd = 10, cr_nstd = 5, cr_width = 100e-6,
                   cr_peak_spacing = 100e-6, cr_removal_time = 1e-3,
                   overwrite = False, verbose = False, catch_exceptions = False):
     """
@@ -178,7 +178,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         deglitch_nstd times the standard deviations of the theta timestream are
         removed from the data.
     cr_nstd (float): number of standard deviations above the mean for find_peaks
-    cr_width (int): width of cosmic rays in number of points
+    cr_width (int): width of cosmic rays in seconds
     cr_peak_spacing (float): number of seconds spacing between cosmic rays
     cr_removal_time (float): number of seconds to remove around each peak
     overwrite (bool): if False, raises an error instead of overwriting files
