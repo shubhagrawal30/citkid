@@ -23,7 +23,7 @@ def guess_p0_fr_vs_temp(temperature, fr, Tc_guess = 1.3, gamma = 1):
     plow = np.polyfit(tlow, flow, 1)
 
     # D guess
-    poly = [5.61657789e-11, 4.93808879e-4]
+    poly = [5.03204303e-11, 4.71528691e-04]
     D_guess = np.polyval(poly, plow[0])
     # f0 guess
     fr0_guess = max(fr)
@@ -174,7 +174,7 @@ def guess_p0_fr_vs_temp_tls(temperature, fr):
     plow = np.polyfit(tlow, flow, 1)
 
     # D guess
-    poly = [5.61657789e-11, 4.93808879e-4]
+    poly = [5.03204303e-11, 4.71528691e-04]
     D_guess = np.polyval(poly, plow[0])
     # f0 guess
     fr0_guess = max(fr)
