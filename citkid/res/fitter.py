@@ -125,28 +125,22 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     # Check bounds
     bounds = bounds_check(p0, bounds)
     # fit
-    if not fit_tau:
-        # Fit with tau enforced from p0[7]
-        tau = p0[7]
-        del bounds[0][7]
-        del bounds[1][7]
-        del p0[7]
-        def fit_func(x_lamb, a, b, c, d, e, f, g):
-            return nonlinear_iq_for_fitter(x_lamb, a, b, c, d, e, f, g, tau)
-        popt, pcov = optimize.curve_fit(fit_func, f, z_stacked, p0,
-                                        bounds = bounds)
-        popt = np.insert(popt, 7, tau)
-        perr = np.sqrt(np.diag(pcov))
-        perr = np.insert(perr, 7, 0)
-    else:
-        # Fit without enforcing tau
-        popt, pcov = optimize.curve_fit(nonlinear_iq_for_fitter, f, z_stacked,
-                              p0, bounds = bounds)
-
-        perr = np.sqrt(np.diag(pcov))
-    z_fit = nonlinear_iq(f, *popt)
-    res = calculate_residuals(z, z_fit)
-
+    res_acceptable = False
+    niter = 0
+    while not res_acceptable:
+        popt, perr, res = fit_util(np.array(p0), np.array(bounds), fit_tau, f, z_stacked, z)
+        if res < 1e-2 or niter > 1:
+            res_acceptable = True
+        elif res < 1e-1:
+            # If 1e-2 < res < 1e-1, the fit is close but not perfect
+            p0 = np.array(popt)
+            niter += 1
+        else:
+            # Usually, amp will be too high if the fit residuals are this high
+            p0[2] /= 10
+            bounds[0][2] /= 10
+            bounds[1][2] /= 10
+            niter += 1
     # plot
     if plotq:
         figax = plot_nonlinear_iq(f, z, popt, p0)
@@ -183,3 +177,46 @@ def fit_iq_circle(z, plotq = False):
     else:
         fig, ax = None, None
     return popt, fig
+
+################################################################################
+######################### Utility functions ####################################
+################################################################################
+def fit_util(p0, bounds, fit_tau, f, z_stacked, z):
+    """
+    Utility function for fitting IQ loops. Given data and initial fit parameters,
+    fits the IQ loop and returns the fit parameters
+
+    Parameters:
+    p0 (list): fit guess parameters
+    bounds (list): fit bounds
+    fit_tau (bool): if False, uses given tau instead of fitting
+    f (np.array): frequency data in Hz
+    z_stacked (np.array): stacked complex S21 data
+    z (np.array) complex S21 data
+
+    Returns:
+    popt (np.array): fit parameters
+    perr (np.array): fit parameter uncertainties
+    res (float): fit residuals
+    """
+    if not fit_tau:
+        # Fit with tau enforced from p0[7]
+        tau = p0[7]
+        bounds = np.array([bounds[0][:7], bounds[1][:7]])
+        p0 = p0[:7]
+        def fit_func(x_lamb, a, b, c, d, e, f, g):
+            return nonlinear_iq_for_fitter(x_lamb, a, b, c, d, e, f, g, tau)
+        popt, pcov = optimize.curve_fit(fit_func, f, z_stacked, p0,
+                                        bounds = bounds)
+        popt = np.insert(popt, 7, tau)
+        perr = np.sqrt(np.diag(pcov))
+        perr = np.insert(perr, 7, 0)
+    else:
+        # Fit without enforcing tau
+        popt, pcov = optimize.curve_fit(nonlinear_iq_for_fitter, f, z_stacked,
+                              p0, bounds = bounds)
+
+        perr = np.sqrt(np.diag(pcov))
+    z_fit = nonlinear_iq(f, *popt)
+    res = calculate_residuals(z, z_fit)
+    return popt, perr, res
