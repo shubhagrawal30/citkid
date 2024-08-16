@@ -12,3 +12,11 @@ python -m pip install .
  ```bash
  python -m pip install --editable .
 ```
+To create a conda environment with the required packages, navigate to the repository directory and run 
+```bash
+conda env create -f environment.yml
+```
+To activate the environment, run 
+```bash
+conda activate citkid
+```
