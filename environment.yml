@@ -1,0 +1,15 @@
+name: citkid
+channels:
+  - conda-forge
+  - anaconda
+  - defaults
+dependencies:
+  - scipy
+  - pandas
+  - jupyterlab
+  - tqdm
+  - numpy
+  - matplotlib
+  - python
+  - pyfftw
+  - numba
