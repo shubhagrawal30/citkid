@@ -13,3 +13,7 @@ dependencies:
   - python
   - pyfftw
   - numba
+  - ipywidgets
+  - pip
+  - pip:
+    - -e .
