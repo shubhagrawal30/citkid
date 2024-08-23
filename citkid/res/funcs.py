@@ -4,7 +4,7 @@ from .util import cardan
 
 @jit(nopython=True)
 def nonlinear_iq(f, fr, Qr, amp, phi, a, i0, q0, tau):
-    """
+    r"""
     Describes the transmission through a nonlinear resonator
 
                     (-j*2*pi*f*tau)    /                           (j phi)   \
