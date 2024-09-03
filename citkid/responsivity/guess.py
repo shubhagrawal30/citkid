@@ -43,8 +43,8 @@ def get_bounds_responsivity_int(p0):
     Returns:
     bounds (list): [lower_bounds, upper_bounds] corresponding to p0
     """
-    bounds = [[p0[0] * 1e3, p0[1] / 1e4, p0[2] * 0.9],
-              [p0[0] / 1e4, p0[1] * 1e4, p0[2] * 1.1]]
+    bounds = [[p0[0] * 10, p0[1] / 10, p0[2] * 0.9],
+              [p0[0] / 10, p0[1] * 10, p0[2] * 1.1]]
     # Flip bounds if they are reversed
     for i, pi in enumerate(p0):
         if bounds[0][i] > bounds[1][i]:

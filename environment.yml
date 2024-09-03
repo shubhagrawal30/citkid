@@ -16,5 +16,7 @@ dependencies:
   - ipywidgets
   - ipympl
   - pip
+  - emcee
+  - corner
   - pip:
     - -e .
