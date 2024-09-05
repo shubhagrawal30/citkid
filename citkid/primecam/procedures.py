@@ -12,7 +12,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                   noise_time = 200, fine_bw = 0.2, rough_bw = 0.2,
                   take_rough_sweep = False, fres_update_method = 'distance',
                   npoints_rough = 300, npoints_gain = 100, npoints_fine = 600,
-                  nnoise_timestreams = 1):
+                  nnoise_timestreams = 1, N_accums = 5):
     """
     Takes IQ sweeps and noise. The LO frequency must already be set.
 
@@ -36,6 +36,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
         in IQ space from the off-resonance point, or 'spacing' for the point
         of largest spacing in IQ space
     nnoise_timestreams (int): number of noise timestreams to take sequentially
+    N_accums (int): number of accumulations for the target sweeps
     """
     fres, ares, Qres = np.array(fres), np.array(ares), np.array(Qres)
     if file_suffix != '':
@@ -53,7 +54,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
         filename = f's21_rough{file_suffix}.npy'
         npoints = npoints_rough
         bw = rough_bw
-        rfsoc.target_sweep(filename, npoints = npoints, bandwidth = bw)
+        rfsoc.target_sweep(filename, npoints = npoints, bandwidth = bw, N_accums = N_accums)
         f, i, q = np.load(rfsoc.out_directory + filename)
         z = i + 1j * q
         fres = update_fres(f, z, npoints = npoints,
@@ -66,13 +67,13 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
     filename = f's21_gain{file_suffix}.npy'
     npoints = npoints_gain
     bw = 10 * fine_bw
-    rfsoc.target_sweep(filename, npoints = npoints, bandwidth = bw)
+    rfsoc.target_sweep(filename, npoints = npoints, bandwidth = bw, N_accums = N_accums)
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
     npoints = npoints_fine
     bw = fine_bw
-    rfsoc.target_sweep(filename,  npoints = npoints, bandwidth = bw)
+    rfsoc.target_sweep(filename,  npoints = npoints, bandwidth = bw, N_accums = N_accums)
 
     # Noise
     if noise_time is not None:
@@ -88,7 +89,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
                   a_target = 0.5, n_iterations = 10, n_addonly = 3,
                   fine_bw = 0.2, fres_update_method = 'distance',
                   npoints_gain = 50, npoints_fine = 400, plot_directory = None,
-                  verbose = False):
+                  verbose = False, , N_accums = 5):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
@@ -112,6 +113,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
     plot_directory (str or None): path to save histograms as the optimization is
         running. If None, doesn't save plots
     verbose (bool): if True, displays a progress bar of the iteration number
+    N_accums (int): number of accumulations for the target sweeps
     """
     if plot_directory is not None:
         os.makedirs(plot_directory, exist_ok = True)
@@ -129,7 +131,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                       noise_time = None, fine_bw = fine_bw,
                       take_rough_sweep = False, npoints_gain = npoints_gain,
-                      npoints_fine = npoints_fine)
+                      npoints_fine = npoints_fine, N_accums = N_accums)
         # Fit IQ loops
         if verbose:
             pbar0.set_description('fitting')
