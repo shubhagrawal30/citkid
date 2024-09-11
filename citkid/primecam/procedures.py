@@ -89,7 +89,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
                   a_target = 0.5, n_iterations = 10, n_addonly = 3,
                   fine_bw = 0.2, fres_update_method = 'distance',
                   npoints_gain = 50, npoints_fine = 400, plot_directory = None,
-                  verbose = False, , N_accums = 5):
+                  verbose = False, N_accums = 5):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power

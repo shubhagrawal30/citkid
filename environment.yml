@@ -18,5 +18,7 @@ dependencies:
   - pip
   - emcee
   - corner
+  - paramiko
+  - redis
   - pip:
     - -e .
