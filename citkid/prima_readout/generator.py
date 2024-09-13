@@ -274,9 +274,7 @@ def generate_timestream(fnoise, fr, Qr, amp, phi, a, p_amp, p_phase):
     # Sxx white and 1/f noise parameters
     sxx_white = 2e-17 # white noise term [1/Hz]
     fknee = 1 # knee of 1/f component [Hz]
-    # Cosmic-ray events
-    cr_peak_dx_vec = -1*np.array([1e-4, 2e-5])
-    cr_t0_vec = np.array([0.23, 0.58])*tlen
+
     # Roll-off tau
     tau_qp = 0.001 # qp lifetime [s]
     # Amplifier white and 1/f noise parameters
@@ -292,7 +290,9 @@ def generate_timestream(fnoise, fr, Qr, amp, phi, a, p_amp, p_phase):
     dx_noise += position
     #
     # Add some cosmic ray events
-    dx_cr = np.ones(fsample*tlen)*0
+    cr_peak_dx_vec = -1*np.array([1e-4, 2e-5])
+    cr_t0_vec = np.array([0.23, 0.58])*tlen
+    dx_cr = np.zeros(fsample*tlen)
     for ii in range(len(cr_t0_vec)):
         t0 = cr_t0_vec[ii]
         cr_peak_dx = cr_peak_dx_vec[ii]
