@@ -84,7 +84,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         pbar = tqdm(pbar, leave = False)
         pbar.set_description('Fitting IQ Loops')
     for pbar_index, resonator_index in enumerate(pbar):
-        plotq_single = ((resonator_index % plot_factor) == 0) and plotq
+        plotq_single = ((pbar_index % plot_factor) == 0) and plotq
         ffine, zfine = ffines[pbar_index], zfines[pbar_index]
         fgain, zgain = fgains[pbar_index], zgains[pbar_index]
         fr, Qr = fres[pbar_index], Qres[pbar_index]
@@ -106,7 +106,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         else:
             plot_path = ''
         try:
-            if resonator_index not in fcal_indices:
+            if pbar_index not in fcal_indices:
                 # For on-resonance, fit IQ loops
                 fitrow, fig = \
                     fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, fres,
