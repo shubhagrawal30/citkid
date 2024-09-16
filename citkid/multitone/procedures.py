@@ -6,13 +6,14 @@ from .fres import update_fres
 from .analysis import fit_iq
 from .plot import plot_ares_opt
 from ..util import save_fig
+import matplotlib.pyplot as plt
 
 ### This is a work in progress -> Don't try to use it yet
 def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
-                  noise_time = 200, if_bw = 1000, fine_bw = 0.2, rough_bw = 0.2,
+                  noise_time = 200, if_bw = 1000, fine_bw = 200e3, rough_bw = 200e3,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300,
                   take_rough_sweep = False, fres_update_method = 'distance',
-                  nnoise_timestreams = 1):
+                  nnoise_timestreams = 1, fsample_noise = 100e3):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -24,7 +25,7 @@ def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suff
     qres (np.array): array of span factors for cutting out of adjacent datasets.
         Resonances should span fres / qres
     fcal_indices (np.array): indices (into fres, ares, qres) of calibration tones
-    out_directory (str): directory to save the data 
+    out_directory (str): directory to save the data
     file_suffix (str): suffix for file names
     noise_time (float or None): noise timestream length in seconds
     if_bw (float): IF bandwidth. 1 / if_bw is the averaging time per data point
@@ -42,7 +43,10 @@ def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suff
     nnoise_timestreams (int): number of noise timestreams to take sequentially.
         Set to 0 to bypass noise acquisition
     """
-    fres, ares, qres = np.array(fres), np.array(ares), np.array(qres)
+    fres = np.asarray(fres, dtype = float)
+    ares= np.asarray(ares, dtype = float)
+    qres = np.asarray(qres, dtype = float)
+    fcal_indices = np.asarray(fcal_indices, dtype = int)
     if file_suffix != '':
         file_suffix = '_' + file_suffix
     if take_rough_sweep:
@@ -56,8 +60,7 @@ def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suff
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
-        f, z = inst.sweep(npoints = npoints_rough, bandwidth = rough_bw,
-                          if_bw = if_bw)
+        f, z = inst.sweep(npoints = npoints_rough, bw = rough_bw, if_bw = if_bw)
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
                             method = fres_update_method)
@@ -66,34 +69,36 @@ def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suff
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    f, z = inst.sweep(npoints = npoints_gain, bandwidth = 10 * fine_bw,
-                      if_bw = if_bw)
+    f, z = inst.sweep(npoints = npoints_gain, bw = 10 * fine_bw, if_bw = if_bw)
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
-    f, z = inst.sweep(npoints = npoints_fine, bandwidth = fine_bw,
-                      if_bw = if_bw)
+    f, z = inst.sweep(npoints = npoints_fine, bw = fine_bw, if_bw = if_bw)
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Noise
+    if nnoise_timestreams > 0:
+        filename = f'noise{file_suffix}_tsample.npy'
+        np.save(out_directory + filename, 1 / fsample_noise)
     for nindex in range(nnoise_timestreams):
         filename = f'noise{file_suffix}_{nindex:02d}.npy'
-        z = rfsoc.capture_noise(noise_time, filename)
+        z = inst.capture_noise(noise_time, 1 / fsample_noise)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
 
+
 # Haven't started adapting this one yet
-def optimize_ares(rfsoc, fres, ares, qres, fcal_indices, max_dbm = -50,
+def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, dbm_max = -50,
                   a_target = 0.5, n_iterations = 10, n_addonly = 3,
-                  fine_bw = 0.2, fres_update_method = 'distance',
+                  fine_bw = 200e3, fres_update_method = 'distance',
                   npoints_gain = 50, npoints_fine = 400, plot_directory = None,
-                  verbose = False, N_accums = 5):
+                  verbose = False, if_bw = 1000):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
 
     Parameters:
-    rfsoc (citkid.primecam.instrument.RFSOC): RFSOC instance
+    inst (citkid.primecam.instrument.RFSOC): RFSOC instance
     fres (np.array): array of center frequencies in Hz
     ares (np.array): array of amplitudes in RFSoC units
     qres (np.array): array of resonators Qs for cutting data. Resonances should
@@ -120,28 +125,27 @@ def optimize_ares(rfsoc, fres, ares, qres, fcal_indices, max_dbm = -50,
     if verbose:
         pbar0 = tqdm(pbar0, leave = False)
     fit_idx = [i for i in range(len(fres)) if i not in fcal_indices]
-    a_max = get_rfsoc_power(max_dbm, np.mean(fres))
     a_nls = []
     for idx0 in pbar0:
         if verbose:
             pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
-        take_iq_noise(rfsoc, fres, ares, qres, fcal_indices, file_suffix,
-                      noise_time = None, fine_bw = fine_bw,
+        take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
+                      fine_bw = fine_bw, nnoise_timestreams = 0,
                       take_rough_sweep = False, npoints_gain = npoints_gain,
-                      npoints_fine = npoints_fine, N_accums = N_accums)
+                      npoints_fine = npoints_fine, if_bw = if_bw)
         # Fit IQ loops
         if verbose:
             pbar0.set_description('fitting')
         data =\
-        fit_iq(rfsoc.out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False)
+        fit_iq(out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False)
         a_nl = np.array(data.sort_values('resonatorIndex').iq_a, dtype = float)
         if len(a_nls):
             a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan]
         else:
             a_nl[a_nl == np.nan] = 2
         a_nls.append(a_nl)
-        np.save(rfsoc.out_directory + f'a_nl_{file_suffix}.npy', a_nl)
+        np.save(out_directory + f'a_nl_{file_suffix}.npy', a_nl)
         if plot_directory is not None:
             fig_hist, fig_opt = plot_ares_opt(a_nls, fcal_indices)
             save_fig(fig_hist, 'ares_hist', plot_directory)
@@ -150,23 +154,22 @@ def optimize_ares(rfsoc, fres, ares, qres, fcal_indices, max_dbm = -50,
         if idx0 <= n_addonly:
             ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
                                            a_nl[fit_idx], a_target = a_target,
-                                           a_max = a_max, dbm_change_high = 2,
+                                           dbm_max = dbm_max, dbm_change_high = 2,
                                            dbm_change_low = 2)
         else:
             ares[fit_idx] = update_ares_addonly(fres[fit_idx], ares[fit_idx],
                                                 a_nl[fit_idx],
                                                 a_target = a_target,
-                                                a_max = a_max,
+                                                dbm_max = dbm_max,
                                                 dbm_change_high = 1,
                                                 dbm_change_low = 1)
         # update fres
-        f, i, q = np.load(rfsoc.out_directory + f's21_fine_{file_suffix}.npy')
-        fres = update_fres(f, i + 1j * q, len(f) // len(fres),
-                           fcal_indices = fcal_indices, method = fres_update_method,
-                        cut_other_resonators =True, fres = fres, qres = qres)
+        f, i, q = np.load(out_directory + f's21_fine_{file_suffix}.npy')
+        fres = update_fres(f, i + 1j * q, fres, qres,
+                           fcal_indices = fcal_indices, method = fres_update_method)
         # for the last iteration, save the updated ares list
         if idx0 == len(fres) - 1:
-            np.save(rfsoc.out_directory + f'ares_{idx0 + 1:02d}', ares)
+            np.save(out_directory + f'ares_{idx0 + 1:02d}', ares)
 
 ################################################################################
 ######################### Utility functions ####################################

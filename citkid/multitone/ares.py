@@ -1,7 +1,8 @@
 import numpy as np
 
+# Need to update docstrings, imports
 def update_ares_pscale(frequency, power_dbm, a_nl, dbm_change_high = 2,
-                       dbm_change_low = 2, a_target = 0.5, a_max = 1000):
+                       dbm_change_low = 2, a_target = 0.5, dbm_max = -50):
     """
     Updates the tone amplitude list to target the given value of a_nl by scaling
     the output power linearly with a_nl, or scales the power linearly if it
@@ -27,7 +28,7 @@ def update_ares_pscale(frequency, power_dbm, a_nl, dbm_change_high = 2,
     if a_nl > 0.77:
         power_dbm_updated = power_dbm - dbm_change_high
     elif a_nl > a_target * 0.001 / 0.5:
-        power_dbm_updated = 10 * np.log10(mW_power * a_target / a_nl)
+        power_dbm_updated = 10 * np.log10(power_mW * a_target / a_nl)
     else:
         power_dbm_updated = power_dbm + dbm_change_low
     if power_dbm_updated > dbm_max:
@@ -35,8 +36,8 @@ def update_ares_pscale(frequency, power_dbm, a_nl, dbm_change_high = 2,
     return power_dbm_updated
 update_ares_pscale = np.vectorize(update_ares_pscale)
 
-def update_ares_addonly(f, a, a_nl, dbm_change_high = 1, dbm_change_low = 1,
-                        a_target = 0.5, a_max = 1000):
+def update_ares_addonly(f, power_dbm, a_nl, dbm_change_high = 1,
+                        dbm_change_low = 1, a_target = 0.5, dbm_max = -50):
     """
     Updates the amplitude of a tone to within 80% of the target by adding or
     subtracting a fixed power in dB.

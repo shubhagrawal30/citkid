@@ -1,6 +1,7 @@
 import numpy as np
 
-def update_fres(fs, zs, fres, spans, fcal_indices, method = 'distance'):
+# Need to update docstrings, imports
+def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
     """
     Update resonance frequencies given fine sweep data
 
@@ -14,19 +15,18 @@ def update_fres(fs, zs, fres, spans, fcal_indices, method = 'distance'):
         to update using the point of furthest distance from the off-resonance
         point. 'none' to return fres.
     fres (np.array or None): list of resonance frequencies in Hz
-    Qres (np.array or None): list of quality factors to cut if
+    qres (np.array or None): list of quality factors to cut if
         cut_other_resonators, or None. Cuts spans of fres / Qres from each
         sweep
 
     Returns:
     fres_new (np.array): array of updated frequencies in Hz
     """
+    fs, zs = np.asarray(fs), np.asarray(zs)
+    fres, qres = np.asarray(fres), np.asarray(qres)
+    fcal_indices = np.asarray(fcal_indices)
     if method == 'none':
-        fres = []
-        for i in range(len(f) // npoints):
-            i0, i1 = npoints * i, npoints * (i + 1)
-            fi = f[i0:i1]
-            fres.append(np.mean(fi))
+        fres = [np.mean(f) for f in fres]
         return np.array(fres)
     elif method == 'mins21':
         update = update_fr_minS21
@@ -37,13 +37,10 @@ def update_fres(fs, zs, fres, spans, fcal_indices, method = 'distance'):
     else:
         raise ValueError("method must be 'mins21', 'distance', or 'spacing'")
     fres_new = []
-    for i in range(len(f) // npoints):
-        i0, i1 = npoints * i, npoints * (i + 1)
-        fi, zi = f[i0:i1], z[i0:i1]
-        if i not in fcal_indices:
-            if cut_other_resonators:
-                spans = fres / Qres
-                fi, zi = cut_fine_scan(fi, zi, fres, spans)
+    for index, (fi, zi) in enumerate(zip(fs, zs)):
+        if index not in fcal_indices:
+            spans = fres / qres
+            fi, zi = cut_fine_scan(fi, zi, fres, spans)
             fres_new.append(update(fi, zi))
         else:
             fres_new.append(np.mean(fi))
