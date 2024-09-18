@@ -9,11 +9,11 @@ from ..util import save_fig
 import matplotlib.pyplot as plt
 
 ### This is a work in progress -> Don't try to use it yet
-def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
-                  noise_time = 200, if_bw = 1000, fine_bw = 200e3, rough_bw = 200e3,
-                  npoints_fine = 600, npoints_gain = 100, npoints_rough = 300,
+async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
+                  noise_time = 200, nsamps = 1, fine_bw = 200e3, rough_bw = 200e3,
+                  npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamples = 10,
                   take_rough_sweep = False, fres_update_method = 'distance',
-                  nnoise_timestreams = 1, fsample_noise = 100e3):
+                  nnoise_timestreams = 1, parser_data_path = '/home/daq1/data/crs/parser/parser_data_00'):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -56,43 +56,44 @@ def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suff
     np.save(out_directory + f'fcal_indices{file_suffix}.npy',
             fcal_indices)
     # write initial target comb
-    inst.write_tones(fres, ares)
+    await inst.write_tones(1, fres, ares)
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
-        f, z = inst.sweep(npoints = npoints_rough, bw = rough_bw, if_bw = if_bw)
+        f, z = await inst.sweep(1, fres, npoints = npoints_rough, bw = rough_bw, nsamps = nsamps)
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
                             method = fres_update_method)
-        inst.write_tones(fres, ares)
+        await inst.write_tones(1, fres, ares)
     np.save(out_directory + f'fres{file_suffix}.npy', fres)
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    f, z = inst.sweep(npoints = npoints_gain, bw = 10 * fine_bw, if_bw = if_bw)
+    f, z = await inst.sweep(1, fres, npoints = npoints_gain, bw = 10 * fine_bw, nsamps = nsamps)
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
-    f, z = inst.sweep(npoints = npoints_fine, bw = fine_bw, if_bw = if_bw)
+    f, z = await inst.sweep(1, fres, npoints = npoints_fine, bw = fine_bw, nsamps = nsamps)
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Noise
+    fsample_noise = 625e6 / (256 * 64 * 2**6)
     if nnoise_timestreams > 0:
         filename = f'noise{file_suffix}_tsample.npy'
         np.save(out_directory + filename, 1 / fsample_noise)
     for nindex in range(nnoise_timestreams):
         filename = f'noise{file_suffix}_{nindex:02d}.npy'
-        z = inst.capture_noise(noise_time, 1 / fsample_noise)
+        z = await inst.capture_noise(1, noise_time, data_path = parser_data_path)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
 
 
 # Haven't started adapting this one yet
-def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, dbm_max = -50,
-                  a_target = 0.5, n_iterations = 10, n_addonly = 3,
-                  fine_bw = 200e3, fres_update_method = 'distance',
-                  npoints_gain = 50, npoints_fine = 400, plot_directory = None,
-                  verbose = False, if_bw = 1000):
+async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, 
+                        dbm_max = -50, a_target = 0.5, n_iterations = 10, n_addonly = 3,
+                        fine_bw = 200e3, fres_update_method = 'distance',
+                        npoints_gain = 50, npoints_fine = 400, plot_directory = None,
+                        verbose = False, nsamples = 10):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
@@ -130,10 +131,10 @@ def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, dbm_max =
         if verbose:
             pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
-        take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
+        await take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
                       fine_bw = fine_bw, nnoise_timestreams = 0,
                       take_rough_sweep = False, npoints_gain = npoints_gain,
-                      npoints_fine = npoints_fine, if_bw = if_bw)
+                      npoints_fine = npoints_fine, nsamples = nsamples)
         # Fit IQ loops
         if verbose:
             pbar0.set_description('fitting')

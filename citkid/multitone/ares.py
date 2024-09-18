@@ -58,7 +58,7 @@ def update_ares_addonly(f, power_dbm, a_nl, dbm_change_high = 1,
     """
     if a_target > 0.77 or a_target <= 0:
         raise ValueError('a_target must be in (0, 0.77]')
-    power_mW = 10 ** (power_dbm / 10)
+    # power_mW = 10 ** (power_dbm / 20)
     if a_nl > a_target * 1.2:
         power_dbm_updated = power_dbm - dbm_change_high
     elif a_nl < a_target * 0.8:

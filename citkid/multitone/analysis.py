@@ -208,7 +208,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
            fgains, zgains, ffines, zfines, znoises, noise_dt =\
     import_iq_noise(directory, file_suffix0, import_noiseq = False)
     inoise, qnoise = np.load(directory + f'noise{file_suffix}_{noise_index:02d}.npy')
-    dt = float(np.load(directory + f'noise{file_suffix}_{noise_index:02d}_tsample.npy'))
+    dt = float(np.load(directory + f'noise{file_suffix}_tsample.npy'))
 
     pbar = list(range(len(ffines)))
     if verbose:
