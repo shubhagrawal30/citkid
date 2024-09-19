@@ -7,7 +7,8 @@ from .analysis import fit_iq
 from .plot import plot_ares_opt
 from ..util import save_fig
 import matplotlib.pyplot as plt
-
+from time import sleep
+    
 ### This is a work in progress -> Don't try to use it yet
 async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
                   noise_time = 200, nsamps = 1, fine_bw = 200e3, rough_bw = 200e3,
@@ -43,10 +44,14 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     nnoise_timestreams (int): number of noise timestreams to take sequentially.
         Set to 0 to bypass noise acquisition
     """
+    if os.path.exists(parser_data_path):
+            raise FileExistsError(f'{parser_data_path} already exists')
+    os.makedirs(out_directory, exist_ok = True)
     fres = np.asarray(fres, dtype = float)
     ares= np.asarray(ares, dtype = float)
     qres = np.asarray(qres, dtype = float)
     fcal_indices = np.asarray(fcal_indices, dtype = int)
+    spans = fres / qres
     if file_suffix != '':
         file_suffix = '_' + file_suffix
     if take_rough_sweep:
@@ -60,7 +65,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
-        f, z = await inst.sweep(1, fres, npoints = npoints_rough, bw = rough_bw, nsamps = nsamps)
+        f, z = await inst.sweep(1, fres, npoints = npoints_rough, bw = rough_bw, nsamps = nsamps, pbar_description = 'Rough sweep')
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
                             method = fres_update_method)
@@ -69,12 +74,12 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    f, z = await inst.sweep(1, fres, npoints = npoints_gain, bw = 10 * fine_bw, nsamps = nsamps)
+    f, z = await inst.sweep(1, fres, npoints = npoints_gain, bw = 10 * fine_bw, nsamps = nsamps, pbar_description = 'Gain sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
-    f, z = await inst.sweep(1, fres, npoints = npoints_fine, bw = fine_bw, nsamps = nsamps)
+    f, z = await inst.sweep(1, fres, npoints = npoints_fine, bw = fine_bw, nsamps = nsamps, pbar_description = 'Fine sweep') 
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Noise
@@ -84,7 +89,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
         np.save(out_directory + filename, 1 / fsample_noise)
     for nindex in range(nnoise_timestreams):
         filename = f'noise{file_suffix}_{nindex:02d}.npy'
-        z = await inst.capture_noise(1, noise_time, data_path = parser_data_path)
+        z = await inst.capture_noise(1, noise_time, fres, data_path = parser_data_path)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
 
 
