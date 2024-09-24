@@ -37,7 +37,8 @@ def update_ares_pscale(frequency, power_dbm, a_nl, dbm_change_high = 2,
 update_ares_pscale = np.vectorize(update_ares_pscale)
 
 def update_ares_addonly(f, power_dbm, a_nl, dbm_change_high = 1,
-                        dbm_change_low = 1, a_target = 0.5, dbm_max = -50):
+                        dbm_change_low = 1, a_target = 0.5, dbm_max = -50,
+                        threshold = 0.2):
     """
     Updates the amplitude of a tone to within 80% of the target by adding or
     subtracting a fixed power in dB.
@@ -52,6 +53,8 @@ def update_ares_addonly(f, power_dbm, a_nl, dbm_change_high = 1,
         a_nl < a_target * 0.8
     a_target (float): target value for a_nl. Must be in (0, 0.77]
     dbm_max (float): maximum value of the tone amplitude in dBm
+    threshold (float): optimization will occur within (1-threshold) and 
+        (1+threshold) of the target 
 
     Returns:
     power_dbm_updated (float): updated value of the tone amplitude in dBm
@@ -59,9 +62,9 @@ def update_ares_addonly(f, power_dbm, a_nl, dbm_change_high = 1,
     if a_target > 0.77 or a_target <= 0:
         raise ValueError('a_target must be in (0, 0.77]')
     # power_mW = 10 ** (power_dbm / 20)
-    if a_nl > a_target * 1.2:
+    if a_nl > a_target * (1 + threshold):
         power_dbm_updated = power_dbm - dbm_change_high
-    elif a_nl < a_target * 0.8:
+    elif a_nl < a_target * (1 - threshold):
         power_dbm_updated = power_dbm + dbm_change_low
     else:
         power_dbm_updated = power_dbm

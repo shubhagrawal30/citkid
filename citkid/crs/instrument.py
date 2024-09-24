@@ -13,7 +13,8 @@ import subprocess
 import numpy as np
 from time import sleep
 from tqdm.auto import tqdm
-from .util import volts_to_dbm, remove_internal_phaseshift
+from .util import volts_to_dbm, remove_internal_phaseshift, convert_parser_to_z
+from .util import volts_per_roc, remove_internal_phaseshift_noise
 
 
 class CRS:
@@ -28,7 +29,7 @@ class CRS:
         self.crs_sn = crs_sn
         s = rfmux.load_session('!HardwareMap [ !CRS { ' + f'serial: "{crs_sn:04d}"' + ' } ]')
         self.d = s.query(rfmux.CRS).one()
-        self.volts_per_roc = np.sqrt(2) * np.sqrt(50* (10**(-1.75 / 10)) / 1000) / 1880796.4604246316
+        self.volts_per_roc = volts_per_roc
         
     async def configure_system(self, clock_source="SMA", full_scale_dbm = 1, verbose = True):
         """
@@ -149,7 +150,7 @@ class CRS:
 
             # take data and loopback calibration data
             await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module)
-            samples_cal = await self.d.get_samples(10 + 1,module=module)
+            samples_cal = await self.d.get_samples(21,module=module)
             await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
             samples = await self.d.get_samples(nsamps + 1,module=module)
             # format and average data 
@@ -249,7 +250,7 @@ class CRS:
         f, z = f[ix], z[ix]
         return f, z
 
-    async def capture_noise(self, module, fres, ares, noise_time, fir_stage = 6,
+    async def capture_noise(self, module, fres, ares, noise_time, ffine, zfine, fir_stage = 6,
                             parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
                             interface='enp2s0', delete_parser_data = False):
         """
@@ -272,12 +273,11 @@ class CRS:
         
         Returns:
         """
-        await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
+        
         os.makedirs('tmp/', exist_ok = True)
         data_path = 'tmp/parser_data_00/'
         if os.path.exists(data_path):
             raise FileExistsError(f'{data_path} already exists')
-
         # set fir stage
         await self.d.set_fir_stage(fir_stage) # Probably will drop packets after 4
         # get_samples will error if fir_stage is too low, but parser will not error
@@ -286,33 +286,31 @@ class CRS:
 
         
         # set the tones
-        self.write_tones(module, fres, ares)
+        await self.write_tones(module, fres, ares)
+        await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
         sleep(1)
+        # # Get calibration data
+        # await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module) 
+        # samples_cal = await self.d.get_samples(21, module=module)
+        # zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
+        # zcal = np.mean(zcal[:len(fres), 1:], axis = 1)
+        # await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
+        # np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
+        # sleep(0.1)
         # Collect the data 
         num_samps = int(sampling_frequency*noise_time)
-        parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', f'{self.crs_sn:04d}', '-m', str(module), '-n', str(num_samps)], shell=False)
-        sleep(noise_time + 5)
+        parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
+                                   f'{self.crs_sn:04d}', '-m', str(module), '-n', str(num_samps)], 
+                                   shell=False)
+        sleep(noise_time + 2)
         # read the data and convert to z
-        parser_batch_file ='m0%d_raw32'%(module)
-        parser_str = np.fromfile(os.path.join(data_path, f'serial_{self.crs_sn:04d}', parser_batch_file), 
-                                 np.dtype([('i', np.int32), ('q', np.int32)]))
-        print('Reading data')
-        z = np.array([complex(*pi) for pi in parser_str])
-        z = np.array([z[i::1024] for i in range(len(fres))])
-        z = z * self.volts_per_roc / 256 
-        print('carrier sweep')
-        await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module) 
-        samples = await self.d.get_samples(11, module=module)
-        await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
-        print('reading carrier')
-        zcal = np.asarray(samples.i) + np.asarray(samples.q)*1.j
-        zcal = np.mean(zcal[1:], axis = 1)[:len(fres), np.newaxis]
-        ## Correct for a factor of 256 scaling in the parser data (this is a quirk of not using libgetdata)
-        print('removing phase')
-        z = remove_internal_phaseshift(fres[:, np.newaxis], z, zcal) 
+        z = convert_parser_to_z(data_path, self.crs_sn, module, ntones = len(fres))
+        z = remove_internal_phaseshift_noise(fres[:, np.newaxis], z, ffine, zfine) 
+        # z *= np.exp(1j * 0.8394967866987446)
         if delete_parser_data:
             shutil.rmtree('tmp/')
         return z
+    
 
     async def capture_fast_noise(self, module, frequency, amplitude, nsamps):
         """ 
@@ -335,7 +333,7 @@ class CRS:
         z = np.array([complex(*sample) for sample in samples])
         
         await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module)
-        samples = await self.d.get_samples(11, module = module, channel = 1)
+        samples = await self.d.get_samples(21, module = module, channel = 1)
         zcal = np.asarray(samples.i) + np.asarray(samples.q)*1.j
         zcal = np.mean(zcal[1:])
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)

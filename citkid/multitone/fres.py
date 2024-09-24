@@ -99,7 +99,7 @@ def update_fr_distance(f, z):
     offres = np.mean(np.roll(z, 10)[:20])
     diff = np.abs(z - offres)
     ix = np.argmax(diff)
-    fr = f[ix]
+    fr = np.mean([f[ix], f[ix + 1]])
     return fr
 
 def cut_fine_scan(f, z, fres, spans):

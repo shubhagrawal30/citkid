@@ -49,7 +49,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
             3 -> will definetely crash 
     """
     data_path = 'tmp/parser_data_00/'
-    if os.path.exists(data_path):
+    if os.path.exists(data_path) and take_noise:
         raise FileExistsError(f'{data_path} already exists')
     os.makedirs(out_directory, exist_ok = True)
     fres = np.asarray(fres, dtype = float)
@@ -97,7 +97,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
         np.save(out_directory + filename, 1 / fsample_noise)
     
         filename = f'noise{file_suffix}_00.npy'
-        z = await inst.capture_noise(1, fres, ares, noise_time, fir_stage = fir_stage,
+        z = await inst.capture_noise(1, fres, ares, noise_time, f, z, fir_stage = fir_stage,
                                 parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
                                 interface='enp2s0', delete_parser_data = True)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
@@ -108,7 +108,8 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
                         dbm_max = -50, a_target = 0.5, n_iterations = 10, n_addonly = 3,
                         fres_update_method = 'distance',
                         npoints_gain = 50, npoints_fine = 400, plot_directory = None,
-                        verbose = False, nsamps = 10):
+                        verbose = False, nsamps = 10, dbm_change_pscale = 2,
+                        dbm_change_addonly = 1, addonly_threshold = 0.2):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
@@ -133,6 +134,8 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
         running. If None, doesn't save plots
     verbose (bool): if True, displays a progress bar of the iteration number
     N_accums (int): number of accumulations for the target sweeps
+    threshold (float): optimization will occur within (1-threshold) and 
+        (1+threshold) of the target during the addonly phase of power optimization
     """
     if plot_directory is not None:
         os.makedirs(plot_directory, exist_ok = True)
@@ -169,15 +172,16 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
         if idx0 <= n_addonly:
             ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
                                            a_nl[fit_idx], a_target = a_target,
-                                           dbm_max = dbm_max, dbm_change_high = 2,
-                                           dbm_change_low = 2)
+                                           dbm_max = dbm_max, dbm_change_high = dbm_change_pscale,
+                                           dbm_change_low = dbm_change_pscale)
         else:
             ares[fit_idx] = update_ares_addonly(fres[fit_idx], ares[fit_idx],
                                                 a_nl[fit_idx],
                                                 a_target = a_target,
                                                 dbm_max = dbm_max,
-                                                dbm_change_high = 1,
-                                                dbm_change_low = 1)
+                                                dbm_change_high = dbm_change_addonly,
+                                                dbm_change_low = dbm_change_addonly,
+                                                threshold = addonly_threshold)
         # update fres
         f, i, q = np.load(out_directory + f's21_fine_{file_suffix}.npy')
         fres = update_fres(f, i + 1j * q, fres, qres,
@@ -190,7 +194,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
 ######################### Utility functions ####################################
 ################################################################################
 def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
-                   resonator_indices = None, fcal_power = 260):
+                   resonator_indices = None, fcal_power = -55):
     '''
     Adds calibration tones to the given resonator list. Fills in largest spaces
     between resonators, up to max_n_tones.
