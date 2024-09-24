@@ -70,7 +70,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         if not overwrite and os.path.exists(out_path):
             raise Exception(f'{out_path} already exists!!!')
     # Split data
-    qres = np.array(qres, dtype = float)
+    qres = np.array(qres, dtype = float) * 1.5
     qres[fcal_indices] = np.inf
     # Assign resonator indices if they are not given
     data = pd.DataFrame([])

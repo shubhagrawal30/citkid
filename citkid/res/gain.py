@@ -106,7 +106,7 @@ def fit_gain(f, z, fr_spans, plotq = False):
         pps = []
         for fcut in fcuts:
             ix = (f >= fcut[0]) & (f <= fcut[1])
-            if len(f[ix]) >= 2:
+            if len(f[ix]) >= 4:
                 pps.append(np.polyfit(f[ix], phase[ix], 1))
         p_phase = np.mean(pps, axis = 0)
     except Exception as e:

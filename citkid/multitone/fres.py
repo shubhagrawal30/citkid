@@ -39,7 +39,7 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
     fres_new = []
     for index, (fi, zi) in enumerate(zip(fs, zs)):
         if index not in fcal_indices:
-            spans = fres / qres
+            spans = fres / qres / 1.5
             fi, zi = cut_fine_scan(fi, zi, fres, spans)
             fres_new.append(update(fi, zi))
         else:
@@ -96,8 +96,8 @@ def update_fr_distance(f, z):
     Returns:
     fr (float): Updated frequency
     """
-    offres = np.mean(list(z[:10]) + list(z[-10:]))
-    diff = abs(z - offres)
+    offres = np.mean(np.roll(z, 10)[:20])
+    diff = np.abs(z - offres)
     ix = np.argmax(diff)
     fr = f[ix]
     return fr
@@ -111,9 +111,12 @@ def cut_fine_scan(f, z, fres, spans):
     fres (np.array): array of frequencies to cut in Hz
     spans (np.array): array of frequency spans in Hz to cut
     """
-    ix = (fres <= max(f)) & (fres >= min(f)) & (np.abs(fres - np.mean(f)) > 1e3)
+    ix = np.argmin(np.abs(fres - np.mean(f)))
+    fr_keep, sp_keep = fres[ix], spans[ix]
+    ix = (fres <= np.max(f)) & (fres >= np.min(f)) & (np.abs(fres - fr_keep) > 1)
     fres, spans = fres[ix], spans[ix]
     for fr, sp in zip(fres, spans):
-        ix = abs(f - fr) > sp
+        ix = (np.abs(f - fr) > sp) | (np.abs(f - fr_keep) < sp_keep)
         f, z = f[ix], z[ix]
+    # Needs to leave the current scan 
     return f, z
