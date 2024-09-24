@@ -11,6 +11,7 @@ from ..res.gain import remove_gain
 from ..noise.analysis import compute_psd
 from ..noise.data_io import save_psd
 from .data_io import import_iq_noise
+from .fres import cut_fine_scan
 
 # Need to update docstrings, imports 
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
@@ -87,15 +88,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         fgain, zgain = fgains[pbar_index], zgains[pbar_index]
         fr, Qr = fres[pbar_index], qres[pbar_index]
         # Cut adjacent resonators from data before fitting
-        for index in range(len(fres)):
-            fr, Qr = fres[index], qres[index]
-            if len(ffine):
-                span = fr / (2 * Qr)
-                if abs((fr - np.mean(ffine)) > 1e3):
-                    ix0 = ffine < fr - span
-                    ix1 = ffine > fr + span
-                    ix_fine = ix0|ix1
-                    ffine, zfine = ffine[ix_fine], zfine[ix_fine]
+        if pbar_index not in fcal_indices:
+            ffine, zfine = cut_fine_scan(ffine, zfine, fres, fres / qres / 1.5)
 
         file_prefix = f'Tn{temperature_index}Fn{resonator_index}'
         file_prefix += f'Pn{power_number}{file_suffix}'
