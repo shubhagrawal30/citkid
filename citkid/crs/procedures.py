@@ -65,12 +65,15 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     np.save(out_directory + f'qres{file_suffix}.npy', qres)
     np.save(out_directory + f'fcal_indices{file_suffix}.npy',
             fcal_indices)
+    # Make qres for sweeps that works with cal tones 
+    qres0 = qres.copy() 
+    qres0[fcal_indices] = np.median(qres)
     # write initial target comb
     await inst.write_tones(1, fres, ares)
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
-        f, z = await inst.sweep_qres(1, fres, ares, qres, npoints = npoints_rough, 
+        f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_rough, 
                                      nsamps = nsamps, verbose = True, pbar_description = 'Rough sweep')
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
@@ -80,13 +83,13 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    f, z = await inst.sweep_qres(1, fres, ares, qres / 10, npoints = npoints_gain, nsamps = nsamps,
+    f, z = await inst.sweep_qres(1, fres, ares, qres0 / 10, npoints = npoints_gain, nsamps = nsamps,
                                    verbose = True, pbar_description = 'Gain sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
-    f, z = await inst.sweep_qres(1, fres, ares, qres, npoints = npoints_fine, nsamps = nsamps,
+    f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_fine, nsamps = nsamps,
                                    verbose = True, pbar_description = 'Fine sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
@@ -156,7 +159,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
         # Fit IQ loops
         if verbose:
             pbar0.set_description('fitting')
-        data = fit_iq(out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False)
+        data = fit_iq(out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False, catch_exceptions = True) # Turn off catch_exceptions
         a_nl = np.array(data.sort_values('resonatorIndex').iq_a, dtype = float)
         if len(a_nls):
             a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan]

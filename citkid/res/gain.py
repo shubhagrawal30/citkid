@@ -80,15 +80,25 @@ def fit_gain(f, z, fr_spans, plotq = False):
         f0, z0 = f.copy(), z.copy()
         dB0 = dB.copy()
     # Remove resonances from span data
-    fcuts = [] # frequencies at which data is cut
-    for fr, span in fr_spans:
-        ix0 = f < fr - span
-        ix1 = f > fr + span
-        ix = ix0|ix1
-        fix = f[~ix]
-        if len(fix):
-            fcuts.append(np.mean(fix))
-        f, z, dB = f[ix], z[ix], dB[ix]
+
+    def cut_scans(f, z, dB, fr_spans):
+        fcuts = [] # frequencies at which data is cut
+        f1, z1, dB1 = f, z, dB
+        for fr, span in fr_spans:
+            ix0 = f1 < fr - span
+            ix1 = f1 > fr + span
+            ix = ix0|ix1
+            fix = f1[~ix]
+            if len(fix):
+                fcuts.append(np.mean(fix)) 
+            f1, z1, dB1 = f1[ix], z1[ix], dB1[ix]
+        return f1, z1, dB1, fcuts 
+    f1, z1, dB1, fcuts = cut_scans(f, z, dB, fr_spans)
+    if len(f1) < 3:
+        
+        f1, z1, dB1, fcuts = cut_scans(f, z, dB, 
+                        [[d[0], d[1] / 1.5] for d in fr_spans])
+    f, z, dB = f1, z1, dB1
     phase = np.angle(z)
     phase = np.unwrap(2 * phase) / 2
     phase0 = phase.copy()
@@ -103,12 +113,23 @@ def fit_gain(f, z, fr_spans, plotq = False):
         # Fit to each cut portion of phase separately, to avoid unwrapping problems
         fcuts = [0] + fcuts + [np.inf]
         fcuts = [[fcuts[i], fcuts[i + 1]] for i in range(len(fcuts) - 1)]
-        pps = []
+        pps, dlens = [], []
         for fcut in fcuts:
             ix = (f >= fcut[0]) & (f <= fcut[1])
             if len(f[ix]) >= 4:
                 pps.append(np.polyfit(f[ix], phase[ix], 1))
-        p_phase = np.mean(pps, axis = 0)
+                dlens.append(len(f[ix]))
+        # Need to reject fits with few data points if there are 
+        # other fits to make up for them  
+        pps, dlens = np.asarray(pps), np.asarray(dlens)
+        i = len(f) // 5 
+        pps0 = pps[dlens > i]
+        while not len(pps0):
+            i -= 1
+            pps0 = pps[dlens > i] 
+            if i < 1:
+                raise Exception('No phase data to fit')
+        p_phase = np.mean(pps0, axis = 0)
     except Exception as e:
         p_amp = np.array([np.nan,np.nan,np.nan])
         p_phase = np.array([np.nan,np.nan])

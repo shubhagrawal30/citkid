@@ -105,6 +105,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
                                                qres, plotq = plotq_single,
                                                return_dataframe = True)
                 fitrow['plotpath'] = plot_path
+                fitrow['fcal'] = 0
             else:
                 # for off-resonance, just fit gain
                 p_amp, p_phase, z_rmvd, (fig, axs) = \
@@ -114,6 +115,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
                 res = np.nan
                 fitrow = make_fit_row(p_amp, p_phase, p, p, p, res,
                                       plot_path = plot_path)
+                fitrow['fcal'] = 1
             if not fig is None:
                 save_fig(fig, file_prefix + '_fit', fit_plot_directory)
                 plt.close(fig)
