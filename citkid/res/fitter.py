@@ -119,7 +119,7 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     if fr_guess is not None:
         p0[0] = fr_guess
     if tau_guess is not None:
-        p0[7] = tau_gues
+        p0[7] = tau_guess
     # Stack z data
     z_stacked = np.hstack((np.real(z), np.imag(z)))
     # Check bounds
@@ -128,7 +128,8 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     res_acceptable = False
     niter = 0
     while not res_acceptable:
-        popt, perr, res = fit_util(np.array(p0), np.array(bounds), fit_tau, f, z_stacked, z)
+        popt, perr, res = fit_util(np.array(p0), np.array(bounds), fit_tau, f, 
+                                   z_stacked, z)
         if res < 1e-2 or niter > 1:
             res_acceptable = True
         elif res < 1e-1:
