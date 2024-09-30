@@ -167,109 +167,6 @@ class peakFinder:
         plt.close(self.fig)  # Close the plot
         self._save()
 
-class qresFinder(qresFinderSingle):
-    def __init__(self, x_datas, y_datas, fress, span0s, 
-                 fres_outpaths, span_outpaths):
-        """
-        Interactive qres finder to loop over single resonance target sweeps.
-        Use this to confirm and adjust ranges for fitting fine scan data.
-        All parameters are lists of parameters passed into qresFinderSingle 
-
-        Parameters: 
-        x_datas (array-like, array-like): list of frequency datas in Hz
-        y_datas (array-like, array-like): list of complex iq datas
-        fress (array-like, float): list of resonance frequencies in Hz
-        span0s (array-like, float): Starting spans in Hz around fr for fitting 
-        other_fres (array-like, array-like): list of lists of other resonance 
-            frequencies, omitting fr. Can include values outside the range of 
-            x_data
-        fres_outpaths (array-like, str): paths to save the list of fres after 
-            adjustments
-        span_outpaths (array-like, str): paths to save the list of [fmin, fmax] 
-            spans for fitting
-        """
-        self.control_is_held = False
-        self.shift_is_held = False
-        self.resonator_index = 0
-        self.x_datas = x_datas
-        self.y_datas = y_datas
-        self.fress = fress
-        self.fres = fress[0]
-        self.span0s = span0s
-        self.other_fress = np.array([np.delete(fress, i) for i in range(len(fress))])
-        self.fres_outpaths = fres_outpaths
-        self.span_outpaths = span_outpaths
-
-        self.other_vlines = []
-        self.vlines = []
-        self.line = None
-        self.iq_cut = []
-        self.span_fill = None
-        self.span_vline = None
-        self.fres_point = []
-        self.iq_scatter = None
-
-        self.setup_plot()
-        self.ax_iq.plot([],[],'sk', 
-                        label = 'shift + right click: place resonance')
-        self.ax_iq.plot([],[],'sk', 
-                        label = 'control + right click: change span')
-        self.ax_iq.plot([],[],'sk', label = 'a/enter: save resonance')
-        self.ax_iq.plot([],[],'sk', label = 'space: go back')
-        self.ax_iq.legend(fontsize = 5, ncols = 2, loc = 'lower right')
-        self.set_resonator_index()
-        plt.show()
-
-    def set_resonator_index(self):
-        """Sets all of the variables for the current resonator index
-           and updates the plot
-        """
-        ri = self.resonator_index
-        self.ax.set_title(f'Resonator: {int(ri)}')
-        self.x_data = np.array(self.x_datas[ri])
-        self.y_data = np.array(self.y_datas[ri])
-        self.dB_data = 20 * np.log10(abs(self.y_data))
-        self.fres_outpath = self.fres_outpaths[ri]
-        self.span_outpath = self.span_outpaths[ri]
-        self.fres = float(self.fress[ri])
-        self.span0 = self.span0s[ri]
-        self.fmin = self.fres - self.span0 / 2
-        self.fmax = self.fres + self.span0 / 2
-
-        self.other_vlines = []
-        self.vlines = []
-        self.line = None
-
-        self.other_fres = np.array(self.other_fress[ri])
-        ix = (self.other_fres >= min(self.x_data)) & (self.other_fres <= max(self.x_data))
-        self.other_fres = self.other_fres[ix]
-        self.ax.cla()
-        self.ax_iq.cla()
-        self.initialize_plot_axes()
-        self.initialize_plot()
-
-    def _go_back(self):
-        """
-        Goes back to the previous resonator
-        """
-        if self.resonator_index != 0:
-            self.resonator_index -= 1
-            self.set_resonator_index()
-
-    def _on_done(self, event):
-        """
-        Saves the data and moves on to the next plot. Disconnects when
-           finished with all the resonators
-        """
-        np.save(self.fres_outpath, np.array(self.fres))
-        np.save(self.span_outpath, np.array([self.fmin, self.fmax]))
-        if self.resonator_index == len(self.fress) - 1:
-            self.fig.canvas.mpl_disconnect(self.cid)
-            plt.close(self.fig)
-        else:
-            self.resonator_index += 1
-            self.set_resonator_index()
-
 ################################################################################
 ########################### Single resonance classes ###########################
 ################################################################################
@@ -534,3 +431,109 @@ class qresFinderSingle:
         plt.close(self.fig)  # Close the plot
         np.save(self.fres_outpath, np.array(self.fres))
         np.save(self.span_outpath, np.array([self.fmin, self.fmax]))
+
+################################################################################
+####################### Single resonance looped classes ########################
+################################################################################
+class qresFinder(qresFinderSingle):
+    def __init__(self, x_datas, y_datas, fress, span0s, 
+                 fres_outpaths, span_outpaths):
+        """
+        Interactive qres finder to loop over single resonance target sweeps.
+        Use this to confirm and adjust ranges for fitting fine scan data.
+        All parameters are lists of parameters passed into qresFinderSingle 
+
+        Parameters: 
+        x_datas (array-like, array-like): list of frequency datas in Hz
+        y_datas (array-like, array-like): list of complex iq datas
+        fress (array-like, float): list of resonance frequencies in Hz
+        span0s (array-like, float): Starting spans in Hz around fr for fitting 
+        other_fres (array-like, array-like): list of lists of other resonance 
+            frequencies, omitting fr. Can include values outside the range of 
+            x_data
+        fres_outpaths (array-like, str): paths to save the list of fres after 
+            adjustments
+        span_outpaths (array-like, str): paths to save the list of [fmin, fmax] 
+            spans for fitting
+        """
+        self.control_is_held = False
+        self.shift_is_held = False
+        self.resonator_index = 0
+        self.x_datas = x_datas
+        self.y_datas = y_datas
+        self.fress = fress
+        self.fres = fress[0]
+        self.span0s = span0s
+        self.other_fress = np.array([np.delete(fress, i) for i in range(len(fress))])
+        self.fres_outpaths = fres_outpaths
+        self.span_outpaths = span_outpaths
+
+        self.other_vlines = []
+        self.vlines = []
+        self.line = None
+        self.iq_cut = []
+        self.span_fill = None
+        self.span_vline = None
+        self.fres_point = []
+        self.iq_scatter = None
+
+        self.setup_plot()
+        self.ax_iq.plot([],[],'sk', 
+                        label = 'shift + right click: place resonance')
+        self.ax_iq.plot([],[],'sk', 
+                        label = 'control + right click: change span')
+        self.ax_iq.plot([],[],'sk', label = 'a/enter: save resonance')
+        self.ax_iq.plot([],[],'sk', label = 'space: go back')
+        self.ax_iq.legend(fontsize = 5, ncols = 2, loc = 'lower right')
+        self.set_resonator_index()
+        plt.show()
+
+    def set_resonator_index(self):
+        """Sets all of the variables for the current resonator index
+           and updates the plot
+        """
+        ri = self.resonator_index
+        self.ax.set_title(f'Resonator: {int(ri)}')
+        self.x_data = np.array(self.x_datas[ri])
+        self.y_data = np.array(self.y_datas[ri])
+        self.dB_data = 20 * np.log10(abs(self.y_data))
+        self.fres_outpath = self.fres_outpaths[ri]
+        self.span_outpath = self.span_outpaths[ri]
+        self.fres = float(self.fress[ri])
+        self.span0 = self.span0s[ri]
+        self.fmin = self.fres - self.span0 / 2
+        self.fmax = self.fres + self.span0 / 2
+
+        self.other_vlines = []
+        self.vlines = []
+        self.line = None
+
+        self.other_fres = np.array(self.other_fress[ri])
+        ix = (self.other_fres >= min(self.x_data)) & (self.other_fres <= max(self.x_data))
+        self.other_fres = self.other_fres[ix]
+        self.ax.cla()
+        self.ax_iq.cla()
+        self.initialize_plot_axes()
+        self.initialize_plot()
+
+    def _go_back(self):
+        """
+        Goes back to the previous resonator
+        """
+        if self.resonator_index != 0:
+            self.resonator_index -= 1
+            self.set_resonator_index()
+
+    def _on_done(self, event):
+        """
+        Saves the data and moves on to the next plot. Disconnects when
+           finished with all the resonators
+        """
+        np.save(self.fres_outpath, np.array(self.fres))
+        np.save(self.span_outpath, np.array([self.fmin, self.fmax]))
+        if self.resonator_index == len(self.fress) - 1:
+            self.fig.canvas.mpl_disconnect(self.cid)
+            plt.close(self.fig)
+        else:
+            self.resonator_index += 1
+            self.set_resonator_index()
