@@ -94,17 +94,15 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Noise
-    if take_noise:
-        fsample_noise = 625e6 / (256 * 64 * 2**fir_stage)
-        filename = f'noise{file_suffix}_tsample.npy'
-        np.save(out_directory + filename, 1 / fsample_noise)
-    
+    if take_noise:    
         filename = f'noise{file_suffix}_00.npy'
         z = await inst.capture_noise(1, fres, ares, noise_time, f, z, fir_stage = fir_stage,
                                 parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
                                 interface='enp2s0', delete_parser_data = True)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
-
+        fsample_noise = inst.sample_frequency
+        filename = f'noise{file_suffix}_tsample.npy'
+        np.save(out_directory + filename, 1 / fsample_noise)
 
 # Haven't started adapting this one yet
 async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, 

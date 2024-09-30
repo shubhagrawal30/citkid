@@ -8,7 +8,7 @@ from .plot import plot_ares_opt
 from ..util import save_fig
 import os
 
-def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
+def take_iq_noise(rfsoc, fres, ares, qres, fcal_indices, file_suffix,
                   noise_time = 200, fine_bw = 0.2, rough_bw = 0.2,
                   take_rough_sweep = False, fres_update_method = 'distance',
                   npoints_rough = 300, npoints_gain = 100, npoints_fine = 600,
@@ -20,8 +20,8 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
     rfsoc (citkid.primecam.instrument.RFSOC): RFSOC instance
     fres (np.array): array of center frequencies in Hz
     ares (np.array): array of amplitudes in RFSoC units
-    Qres (np.array): array of resonators Qs for cutting data. Resonances should
-        span fres / Qres
+    qres (np.array): array of resonators Qs for cutting data. Resonances should
+        span fres / qres
     fcal_indices (np.array): indices into fres of calibration tones
     file_suffix (str): suffix for file names
     noise_time (float or None): noise timestream length in seconds, or None to
@@ -38,13 +38,13 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
     nnoise_timestreams (int): number of noise timestreams to take sequentially
     N_accums (int): number of accumulations for the target sweeps
     """
-    fres, ares, Qres = np.array(fres), np.array(ares), np.array(Qres)
+    fres, ares, qres = np.array(fres), np.array(ares), np.array(qres)
     if file_suffix != '':
         file_suffix = '_' + file_suffix
     if take_rough_sweep:
         np.save(rfsoc.out_directory + f'fres_initial{file_suffix}.npy', fres)
     np.save(rfsoc.out_directory + f'ares{file_suffix}.npy', ares)
-    np.save(rfsoc.out_directory + f'Qres{file_suffix}.npy', Qres)
+    np.save(rfsoc.out_directory + f'qres{file_suffix}.npy', qres)
     np.save(rfsoc.out_directory + f'fcal_indices{file_suffix}.npy',
             fcal_indices)
     # write initial target comb
@@ -85,7 +85,7 @@ def take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
                 filename = f'noise{file_suffix}_{nindex:02d}.npy'
                 rfsoc.capture_save_noise(noise_time, filename)
 
-def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
+def optimize_ares(rfsoc, fres, ares, qres, fcal_indices, max_dbm = -50,
                   a_target = 0.5, n_iterations = 10, n_addonly = 3,
                   fine_bw = 0.2, fres_update_method = 'distance',
                   npoints_gain = 50, npoints_fine = 400, plot_directory = None,
@@ -98,8 +98,8 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
     rfsoc (citkid.primecam.instrument.RFSOC): RFSOC instance
     fres (np.array): array of center frequencies in Hz
     ares (np.array): array of amplitudes in RFSoC units
-    Qres (np.array): array of resonators Qs for cutting data. Resonances should
-        span fres / Qres
+    qres (np.array): array of resonators Qs for cutting data. Resonances should
+        span fres / qres
     fcal_indices (np.array): calibration tone indices
     max_dbm (float): maximum power per tone in dBm
     a_target (float): target value for a_nl. Must be in range (0, 0.77]
@@ -117,7 +117,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
     """
     if plot_directory is not None:
         os.makedirs(plot_directory, exist_ok = True)
-    fres, ares, Qres = np.array(fres), np.array(ares), np.array(Qres)
+    fres, ares, qres = np.array(fres), np.array(ares), np.array(qres)
     pbar0 = list(range(n_iterations))
     if verbose:
         pbar0 = tqdm(pbar0, leave = False)
@@ -128,7 +128,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         if verbose:
             pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
-        take_iq_noise(rfsoc, fres, ares, Qres, fcal_indices, file_suffix,
+        take_iq_noise(rfsoc, fres, ares, qres, fcal_indices, file_suffix,
                       noise_time = None, fine_bw = fine_bw,
                       take_rough_sweep = False, npoints_gain = npoints_gain,
                       npoints_fine = npoints_fine, N_accums = N_accums)
@@ -165,7 +165,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
         f, i, q = np.load(rfsoc.out_directory + f's21_fine_{file_suffix}.npy')
         fres = update_fres(f, i + 1j * q, len(f) // len(fres),
                            fcal_indices = fcal_indices, method = fres_update_method,
-                        cut_other_resonators =True, fres = fres, Qres = Qres)
+                        cut_other_resonators =True, fres = fres, qres = qres)
         # for the last iteration, save the updated ares list
         if idx0 == len(fres) - 1:
             np.save(rfsoc.out_directory + f'ares_{idx0 + 1:02d}', ares)
@@ -173,7 +173,7 @@ def optimize_ares(rfsoc, fres, ares, Qres, fcal_indices, max_dbm = -50,
 ################################################################################
 ######################### Utility functions ####################################
 ################################################################################
-def make_cal_tones(fres, ares, Qres, max_n_tones = 1000,
+def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
                    resonator_indices = None,
                    new_resonator_indices_start = None):
     '''
@@ -184,7 +184,7 @@ def make_cal_tones(fres, ares, Qres, max_n_tones = 1000,
     new_resonator_indices_start if provided, or the length of the array if not
 
     Parameters:
-    fres, ares, Qres (np.array): frequency, amplitude, and Q arrays
+    fres, ares, qres (np.array): frequency, amplitude, and Q arrays
     max_n_tones (int): maximum number of tones
     resonator_indices (array-like or None): resonator indices corresponding to
         fres
@@ -192,7 +192,7 @@ def make_cal_tones(fres, ares, Qres, max_n_tones = 1000,
         index labels, or None to start from the end of the array
 
     Returns:
-    fres, ares, Qres (np.array): frequency, amplitude, and Q arrays with
+    fres, ares, qres (np.array): frequency, amplitude, and Q arrays with
         calibration tones added
     fcal_indices (np.array): calibration tone indices
     new_resonator_indices (np.array): new resonator index list with the new
@@ -202,9 +202,9 @@ def make_cal_tones(fres, ares, Qres, max_n_tones = 1000,
     '''
     fres = np.asarray(fres, dtype = float)
     ares = np.asarray(ares, dtype = float)
-    Qres = np.asarray(Qres, dtype = float)
+    qres = np.asarray(qres, dtype = float)
     ix = np.argsort(fres)
-    fres, ares, Qres = fres[ix], ares[ix], Qres[ix]
+    fres, ares, qres = fres[ix], ares[ix], qres[ix]
 
     if resonator_indices is not None and len(resonator_indices) != len(fres):
         raise ValueError('resonator_indices must be the same length as fres')
@@ -221,7 +221,7 @@ def make_cal_tones(fres, ares, Qres, max_n_tones = 1000,
     for fcal_index, fres_index in enumerate(fcal_indices):
         fres = np.insert(fres, fres_index, fcal[fcal_index])
         ares = np.insert(ares, fres_index, 260)
-        Qres = np.insert(Qres, fres_index, np.inf)
+        qres = np.insert(qres, fres_index, np.inf)
         new_index = new_resonator_indices_start + fcal_index
         new_resonator_indices = np.insert(new_resonator_indices, fres_index, new_index)
-    return fres, ares, Qres, fcal_indices, new_resonator_indices
+    return fres, ares, qres, fcal_indices, new_resonator_indices

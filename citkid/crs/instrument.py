@@ -127,7 +127,7 @@ class CRS:
         # Set the fir stage 
         fir_stage = 6 
         await self.d.set_fir_stage(fir_stage) 
-        sampling_frequency = 625e6 / (256 * 64 * 2**fir_stage)
+        sample_frequency = 625e6 / (256 * 64 * 2**fir_stage)
 
         # Write amplitudes 
         fres = [fi[0] for fi in frequencies]
@@ -273,7 +273,8 @@ class CRS:
         
         Returns:
         """
-        
+        fres, ares = np.asarray(fres), np.asarray(ares) 
+        ffine, zfine = np.asarray(ffine), np.asarray(zfine)
         os.makedirs('tmp/', exist_ok = True)
         data_path = 'tmp/parser_data_00/'
         if os.path.exists(data_path):
@@ -281,7 +282,7 @@ class CRS:
         # set fir stage
         await self.d.set_fir_stage(fir_stage) # Probably will drop packets after 4
         # get_samples will error if fir_stage is too low, but parser will not error
-        sampling_frequency = 625e6 / (256 * 64 * 2**fir_stage) 
+        self.sample_frequency = 625e6 / (256 * 64 * 2**fir_stage) 
         print(f'fir stage is {await self.d.get_fir_stage()}')
 
         
@@ -298,7 +299,7 @@ class CRS:
         # np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
         # sleep(0.1)
         # Collect the data 
-        num_samps = int(sampling_frequency*noise_time)
+        num_samps = int(self.sample_frequency*noise_time)
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
                                    f'{self.crs_sn:04d}', '-m', str(module), '-n', str(num_samps)], 
                                    shell=False)
