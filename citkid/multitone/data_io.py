@@ -16,6 +16,8 @@ def import_iq_noise(directory, file_suffix, import_noiseq = True):
     fres (np.array): noise frequency array in Hz
     ares (np.array): RFSoC amplitude array
     qres (np.array): resonance Q array for cutting data
+    fres_all (np.array): full list of resonance frequencies in Hz 
+    qres_all (np.array): full list of resonance Qs for cutting data 
     fcal_indices (np.array): calibration tone indices
     frough, zrough (np.array): rough sweep frequency and complex S21 data
     fgain, zgain (np.array): gain sweep frequency and complex S21 data
@@ -34,6 +36,17 @@ def import_iq_noise(directory, file_suffix, import_noiseq = True):
     ares = np.load(directory + f'ares{file_suffix}.npy')
     qres = np.load(directory + f'qres{file_suffix}.npy')
     fcal_indices = np.load(directory + f'fcal_indices{file_suffix}.npy')
+    path = directory + f'fres_all{file_suffix}.npy'
+    if os.path.exists(path):
+        fres_all = np.load(path)   
+    else:
+        fres_all = np.delete(fres, fcal_indices) 
+    path = directory + f'qres_all{file_suffix}.npy'
+    if os.path.exists(path):
+        qres_all = np.load(path)   
+    else:
+        qres_all = np.delete(qres, fcal_indices)
+    
     # sweeps
     path = directory + f's21_rough{file_suffix}.npy'
     if os.path.exists(path):
@@ -58,5 +71,5 @@ def import_iq_noise(directory, file_suffix, import_noiseq = True):
             znoises.append(znoise)
     else:
         noise_dt = None
-    return fres_initial, fres, ares, qres, fcal_indices, frough, zrough,\
+    return fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgain, zgain, ffine, zfine, znoises, noise_dt

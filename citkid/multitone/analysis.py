@@ -12,6 +12,7 @@ from ..noise.analysis import compute_psd
 from ..noise.data_io import save_psd
 from .data_io import import_iq_noise
 from .fres import cut_fine_scan
+from hidfmux.core.utils.transferfunctions import apply_cic2_comp_psd
 
 # Need to update docstrings, imports 
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
@@ -55,7 +56,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     """
     directory = fix_path(directory)
     # Import data
-    fres_initial, fres, ares, qres, fcal_indices, frough, zrough,\
+    fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgains, zgains, ffines, zfines, znoises, noise_dt =\
     import_iq_noise(directory, file_suffix, import_noiseq = False)
     # Set up output files
@@ -73,6 +74,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     # Split data
     qres = np.array(qres, dtype = float) * 1.5
     qres[fcal_indices] = np.inf
+    qres_all = np.array(qres_all, dtype = float) * 1.5
     # Assign resonator indices if they are not given
     data = pd.DataFrame([])
     if resonator_indices is None:
@@ -101,16 +103,16 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
             if pbar_index not in fcal_indices:
                 # For on-resonance, fit IQ loops
                 fitrow, fig = \
-                    fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, fres,
-                                               qres, plotq = plotq_single,
+                    fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, fres_all,
+                                               qres_all, plotq = plotq_single,
                                                return_dataframe = True)
                 fitrow['plotpath'] = plot_path
                 fitrow['fcal'] = 0
             else:
                 # for off-resonance, just fit gain
                 p_amp, p_phase, z_rmvd, (fig, axs) = \
-                    fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, fres,
-                                              qres, plotq = plotq_single)
+                    fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, fres_all,
+                                              qres_all, plotq = plotq_single)
                 p = [np.nan] * 7
                 res = np.nan
                 fitrow = make_fit_row(p_amp, p_phase, p, p, p, res,
@@ -147,7 +149,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     return data
 
 def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
-                  plot_calq = False, plot_psdq = False,
+                  plot_calq = False, plot_psdq = False, correct_cic2 = False,
                   plot_timestreamq = False, plot_factor = 1,
                   deglitch_nstd = 10, cr_nstd = 5, cr_width = 100e-6,
                   cr_peak_spacing = 100e-6, cr_removal_time = 1e-3,
@@ -200,11 +202,11 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         raise Exception(f'{outpath} already exists!!!')
     # Import data
     directory = data.iloc[0].dataDirectory
-    fres_initial, fres, ares, qres, fcal_indices, frough, zrough,\
+    fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgains, zgains, ffines, zfines, znoises, noise_dt =\
     import_iq_noise(directory, file_suffix0, import_noiseq = False)
     inoise, qnoise = np.load(directory + f'noise{file_suffix}_{noise_index:02d}.npy')
-    dt = float(np.load(directory + f'noise{file_suffix}_tsample.npy'))
+    dt = float(np.load(directory + f'noise{file_suffix}_tsample_{noise_index:02d}.npy'))
 
     pbar = list(range(len(ffines)))
     if verbose:
@@ -215,7 +217,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         plot_calq_single = ((index % plot_factor) == 0) and plot_calq
         plot_psdq_single = ((index % plot_factor) == 0) and plot_psdq
         plot_timestreamq_single = ((index % plot_factor) == 0) and plot_timestreamq
-        prefix = f'Fn{index:02d}_NI{noise_index}'
+        prefix = f'Fn{index:02d}_NI{noise_index}_{file_suffix}'
         iq_fit_row = data[data.dataIndex == index].iloc[0]
         ffine, zfine = ffines[index], zfines[index]
 
@@ -240,6 +242,11 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             plot_calq = plot_calq_single,
                             plot_psdq = plot_psdq_single,
                             plot_timestreamq = plot_timestreamq_single)
+                if correct_cic2:
+                    for i in range(1, 3):
+                        ftrim_off, s = apply_cic2_comp_psd(psd_offres[0], 10 ** (psd_offres[i] / 10), 1 / dt, trim=0.15)
+                        psd_offres[i] = 10 * np.log10(s)
+                    psd_offres[0] = ftrim_off
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, None, dt,
@@ -257,10 +264,18 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             cr_nstd = cr_nstd, cr_width = cr_width,
                             cr_peak_spacing = cr_peak_spacing,
                             cr_removal_time = cr_removal_time)
+                
+                if correct_cic2:
+                    for i in range(1, 3):
+                        ftrim_on, s = apply_cic2_comp_psd(psd_onres[0], 10 ** (psd_onres[i] / 10), 1 / dt, trim=0.15)
+                        psd_onres[i] = 10 * np.log10(s)
+                    ftrim_on, psd_onres[3] = apply_cic2_comp_psd(psd_onres[0], psd_onres[3], 1 / dt, trim=0.15)
+                    psd_onres[0] = ftrim_on
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, dt, None,
-                 out_directory, plot_directory, prefix = prefix, iq_fit_row = iq_fit_row)
+                 out_directory, plot_directory, prefix = prefix, iq_fit_row = iq_fit_row)                
+                
         except Exception as e:
             if not catch_exceptions:
                 raise e

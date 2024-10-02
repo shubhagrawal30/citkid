@@ -15,6 +15,8 @@ from time import sleep
 from tqdm.auto import tqdm
 from .util import volts_to_dbm, remove_internal_phaseshift, convert_parser_to_z
 from .util import volts_per_roc, remove_internal_phaseshift_noise
+from hidfmux.core.utils.transferfunctions import apply_pfb_correction
+from hidfmux.analysis.noise_processing import separate_iq_fft_to_i_and_q
 
 
 class CRS:
@@ -102,7 +104,8 @@ class CRS:
                 ctx.set_amplitude(ar, self.d.UNITS.NORMALIZED, target=self.d.TARGET.DAC, channel=ch+1, module=module)
             await ctx()
 
-    async def sweep(self, module, frequencies, ares, nsamps = 10, verbose = True, pbar_description = 'Sweeping'):
+    async def sweep(self, module, frequencies, ares, nsamps = 10, verbose = True, pbar_description = 'Sweeping',
+                    return_raw = False):
         """
         Performs a frequency sweep and returns the complex S21 value at each frequency. Performs sweeps over 
         axis 0 of frequencies simultaneously 
@@ -134,6 +137,8 @@ class CRS:
         await self.write_tones(module, fres, ares)
         # Initialize z array 
         z = np.empty((n_channels, n_points), dtype = complex)
+        zcal = np.empty((n_channels, n_points), dtype = complex) 
+        zraw = np.empty((n_channels, n_points), dtype = complex)
 
         pbar = range(n_points) 
         if verbose:
@@ -159,11 +164,15 @@ class CRS:
             zical = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
             zical = np.mean(zical[:n_channels, 1:], axis = 1)
             # adjust for loopback calibration
+            zcal[:, sweep_index] = zical 
+            zraw[:, sweep_index] = zi 
             zi = remove_internal_phaseshift(frequencies[:, sweep_index], zi, zical) 
             z[:, sweep_index] = zi * self.volts_per_roc 
         # Turn off channels 
         await self.d.clear_channels()
-        return z 
+        if return_raw:
+            return z, zcal, zraw 
+        return z
 
     async def sweep_linear(self, module, fres, ares, bw = 20e3, npoints = 10, 
                            nsamps = 10, verbose = True, pbar_description = 'Sweeping'):
@@ -186,6 +195,7 @@ class CRS:
             N is the index of each point in the sweep 
         z (M X N np.array): array of complex S21 data corresponding to f 
         """ 
+        fres, ares = np.asarray(fres), np.asarray(ares)
         f = np.linspace(fres - bw / 2, fres + bw / 2, npoints).T
         z = await self.sweep(module, f, ares, nsamps = nsamps, 
                             verbose = verbose, pbar_description = pbar_description)
@@ -250,9 +260,10 @@ class CRS:
         f, z = f[ix], z[ix]
         return f, z
 
-    async def capture_noise(self, module, fres, ares, noise_time, ffine, zfine, fir_stage = 6,
+    async def capture_noise(self, module, fres, ares, noise_time, fir_stage = 6,
                             parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
-                            interface='enp2s0', delete_parser_data = False):
+                            interface='enp2s0', delete_parser_data = False,
+                            verbose = True, return_raw = False):
         """
         Captures a noise timestream using the parser.
         
@@ -263,8 +274,7 @@ class CRS:
         fir_stage (int): fir_stage frequency downsampling factor.
             6 ->   596.05 Hz 
             5 -> 1,192.09 Hz 
-            4 -> 2,384.19 Hz, might crash 
-            3 -> will definetely crash 
+            4 -> 2,384.19 Hz, will drop some packets
         parser_loc (str): path to the parser file 
         data_path (str): path to the data output file for the parser 
         interface (str): Ethernet interface identifier 
@@ -273,8 +283,9 @@ class CRS:
         
         Returns:
         """
+        if fir_stage <= 4:
+            warning (f"packets will drop if fir_stage < 5", UserWarning)
         fres, ares = np.asarray(fres), np.asarray(ares) 
-        ffine, zfine = np.asarray(ffine), np.asarray(zfine)
         os.makedirs('tmp/', exist_ok = True)
         data_path = 'tmp/parser_data_00/'
         if os.path.exists(data_path):
@@ -282,7 +293,7 @@ class CRS:
         # set fir stage
         await self.d.set_fir_stage(fir_stage) # Probably will drop packets after 4
         # get_samples will error if fir_stage is too low, but parser will not error
-        self.sample_frequency = 625e6 / (256 * 64 * 2**fir_stage) 
+        self.sample_frequency = 625e6 / (256 * 64 * 2 ** fir_stage) 
         print(f'fir stage is {await self.d.get_fir_stage()}')
 
         
@@ -290,28 +301,34 @@ class CRS:
         await self.write_tones(module, fres, ares)
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
         sleep(1)
-        # # Get calibration data
-        # await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module) 
-        # samples_cal = await self.d.get_samples(21, module=module)
-        # zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-        # zcal = np.mean(zcal[:len(fres), 1:], axis = 1)
-        # await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
-        # np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
-        # sleep(0.1)
+        # Get calibration data
+        await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module) 
+        samples_cal = await self.d.get_samples(21, module=module)
+        zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
+        zcal = np.mean(zcal[:len(fres), 1:], axis = 1)
+        await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
+        np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
+        sleep(0.1)
         # Collect the data 
         num_samps = int(self.sample_frequency*noise_time)
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
                                    f'{self.crs_sn:04d}', '-m', str(module), '-n', str(num_samps)], 
                                    shell=False)
-        sleep(noise_time + 2)
+        pbar = list(range(int(noise_time) + 2))
+        if verbose:
+            pbar = tqdm(pbar, leave = False)
+        for i in pbar:
+            sleep(1) 
         # read the data and convert to z
-        z = convert_parser_to_z(data_path, self.crs_sn, module, ntones = len(fres))
-        z = remove_internal_phaseshift_noise(fres[:, np.newaxis], z, ffine, zfine) 
+        zraw = convert_parser_to_z(data_path, self.crs_sn, module, ntones = len(fres))
+        z = remove_internal_phaseshift(fres[:, np.newaxis], zraw, zcal[:, np.newaxis])
+        # z = remove_internal_phaseshift_noise(fres[:, np.newaxis], z, ffine, zfine) 
         # z *= np.exp(1j * 0.8394967866987446)
         if delete_parser_data:
             shutil.rmtree('tmp/')
+        if return_raw:
+            return z, zcal, zraw
         return z
-    
 
     async def capture_fast_noise(self, module, frequency, amplitude, nsamps):
         """ 
@@ -325,20 +342,30 @@ class CRS:
         module (int): module index 
         frequency (float): tone frequency in Hz 
         amplitude (float): tone amplitude in dBm 
-        nsamps (int): number of samples. Max is 1e5
+        nsamps (int): number of samples. Max is 1e6
         """
+        fsample = 625e6 / 256
         await self.write_tones(module, [frequency], [amplitude])
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
         sleep(1)
-        samples = await self.d.get_pfb_samples(int(nsamps), 'RAW', 1, module) # May have 20% exact difference 
-        z = np.array([complex(*sample) for sample in samples])
-        
+        pfb_samples = await self.d.get_pfb_samples(int(nsamps), 'RAW', 1, module) # May have 20% exact difference 
+        pfb_samples = np.array([complex(*sample) for sample in pfb_samples])
         await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module)
-        samples = await self.d.get_samples(21, module = module, channel = 1)
-        zcal = np.asarray(samples.i) + np.asarray(samples.q)*1.j
-        zcal = np.mean(zcal[1:])
+        
+        fraw, fft_corr_raw, builtin_gain_factor, pfb_sample_len =\
+            apply_pfb_correction(pfb_samples, self.nco_freq, frequency, binlim=0.6e6, trim=True)
+        cal_samples = await self.d.get_pfb_samples(2100, 'RAW', 1, module)
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
+        cal_samples = np.array([complex(*sample) for sample in cal_samples][100:])
+        fcal, fft_corr_cal, builtin_gain_factor_cal, pfb_sample_len_cal =\
+            apply_pfb_correction(cal_samples, self.nco_freq, frequency, binlim=0.6e6, trim=True)
+
+        ifft_raw, qfft_raw = [np.fft.fftshift(x) for x in separate_iq_fft_to_i_and_q(np.fft.fftshift(fft_corr_raw))]
+        zraw = ifft_raw + 1j * qfft_raw
+        ifft_cal, qfft_cal = [np.fft.fftshift(x) for x in separate_iq_fft_to_i_and_q(np.fft.fftshift(fft_corr_cal))]
+        zcal = ifft_cal + 1j * qfft_cal
+        zcal = np.mean(zcal)
 
         # Max of nsamps is 1e5 
-        z = remove_internal_phaseshift(frequency, z, zcal) * self.volts_per_roc
-        return z
+        z = remove_internal_phaseshift(frequency, zraw, zcal) * self.volts_per_roc
+        return fraw, z

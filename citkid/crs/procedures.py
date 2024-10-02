@@ -13,7 +13,8 @@ from time import sleep
 async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
                   noise_time = 200, take_noise = False,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
-                  take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6):
+                  take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
+                  fres_all = None, qres_all = None):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -65,6 +66,9 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     np.save(out_directory + f'qres{file_suffix}.npy', qres)
     np.save(out_directory + f'fcal_indices{file_suffix}.npy',
             fcal_indices)
+    if fres_all is not None:
+        np.save(out_directory + f'fres_all{file_suffix}.npy', ares)
+        np.save(out_directory + f'qres_all{file_suffix}.npy', ares)
     # Make qres for sweeps that works with cal tones 
     qres0 = qres.copy() 
     qres0[fcal_indices] = np.median(qres)
@@ -96,12 +100,12 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     # Noise
     if take_noise:    
         filename = f'noise{file_suffix}_00.npy'
-        z = await inst.capture_noise(1, fres, ares, noise_time, f, z, fir_stage = fir_stage,
+        z = await inst.capture_noise(1, fres, ares, noise_time, fir_stage = fir_stage,
                                 parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
                                 interface='enp2s0', delete_parser_data = True)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
         fsample_noise = inst.sample_frequency
-        filename = f'noise{file_suffix}_tsample.npy'
+        filename = f'noise{file_suffix}_tsample_00.npy'
         np.save(out_directory + filename, 1 / fsample_noise)
 
 # Haven't started adapting this one yet
