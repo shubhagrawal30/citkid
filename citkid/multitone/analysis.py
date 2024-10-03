@@ -217,7 +217,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         plot_calq_single = ((index % plot_factor) == 0) and plot_calq
         plot_psdq_single = ((index % plot_factor) == 0) and plot_psdq
         plot_timestreamq_single = ((index % plot_factor) == 0) and plot_timestreamq
-        prefix = f'Fn{index:02d}_NI{noise_index}_{file_suffix}'
+        prefix = f'Fn{index:02d}_NI{noise_index}{file_suffix}'
         iq_fit_row = data[data.dataIndex == index].iloc[0]
         ffine, zfine = ffines[index], zfines[index]
 

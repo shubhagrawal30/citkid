@@ -226,6 +226,7 @@ def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
     ix = np.argsort(fres)
     fres, ares, qres = fres[ix], ares[ix], qres[ix]
     if resonator_indices is not None:
+        resonator_indices = np.asarray(resonator_indices)
         resonator_indices = resonator_indices[ix]
     if resonator_indices is None:
         resonator_indices = np.asarray(range(len(fres)))
