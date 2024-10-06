@@ -108,7 +108,6 @@ def guess_fr(f, z, z0, phi, a, Qr):
     fr_guess /= np.polyval(poly, a / Qr)
     return fr_guess
 
-
 def guess_phi_amp(z, z0):
     """
     Guess the impedance mismatch rotation and amplitude.
