@@ -7,7 +7,6 @@ def guess_p0_nonlinear_iq(f, z):
     """
     Get initial guess parameters for nonlinear_iq.
     Assumes gain and cable delay have been removed
-    Modified from https://github.com/Wheeler1711/submm_python_routines
 
     Parameters:
     f (np.array): array of frequency data in Hz
@@ -108,7 +107,6 @@ def guess_fr(f, z, z0, phi, a, Qr):
     poly = [-1.04607392,  0.9999992]
     fr_guess /= np.polyval(poly, a / Qr)
     return fr_guess
-
 
 def guess_phi_amp(z, z0):
     """

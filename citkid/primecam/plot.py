@@ -39,7 +39,7 @@ def plot_ares_opt(a_nls, fcal_indices):
         a_nl = [a_nl[i] for i in range(len(a_nl)) if i not in fcal_indices]
         color = plt.cm.viridis(index / len(a_nls))
         a_opt = [a for a in a_nl if a <= 0.6 and a >= 0.4]
-        percent = len(a_opt) / len(a_nl) * 100
+        percent = len(a_opt) / (len(a_nl)) * 100
         ax_opt.scatter(index, percent, marker = 's', color = color)
         indices.append(index)
         percents.append(percent)

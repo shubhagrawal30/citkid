@@ -3,7 +3,7 @@ from ..res.gain import remove_gain
 
 def convert_iq_to_x(f, z, p_amp, p_phase, origin, v, p_x):
     """
-    Calculates theta from complex z data and calibration parameters
+    Calculates x = df/f from complex z data and calibration parameters
 
     Parameters:
     f (float or array-like): frequency data corresponding to z, or tone

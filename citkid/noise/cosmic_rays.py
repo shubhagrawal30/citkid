@@ -1,7 +1,7 @@
 from scipy.signal import find_peaks
 import numpy as np
 
-def remove_cosmic_rays(theta, A, tsample, cr_nstd = 5, cr_width = 12,
+def remove_cosmic_rays(theta, A, tsample, cr_nstd = 5, cr_width = 100e-6,
                        cr_peak_spacing = 100e-6, cr_removal_time = 1e-3):
     """
     Remove cosmic rays from a timestream using a peak finding algorithm.
@@ -13,7 +13,7 @@ def remove_cosmic_rays(theta, A, tsample, cr_nstd = 5, cr_width = 12,
     A (np.array): amplitude array with cosmic rays
     tsample (float): sample time of theta array
     cr_nstd (float): number of standard deviations above the mean for find_peaks
-    cr_width (int): width of cosmic rays in number of points
+    cr_width (float): width of cosmic rays in seconds
     cr_peak_spacing (float): number of seconds spacing between cosmic rays
     cr_removal_time (float): number of seconds to remove around each peak
 
@@ -24,8 +24,11 @@ def remove_cosmic_rays(theta, A, tsample, cr_nstd = 5, cr_width = 12,
     """
     height = np.mean(-theta) + cr_nstd * np.std(theta)
     distance = int(cr_peak_spacing / tsample)
+    cr_width_points = int(cr_width / tsample)
     if distance < 1:
         distance = 1
+    if cr_width_points < 1:
+        cr_width_points = 1
     cr_indices, _ = find_peaks(-theta, width = cr_width,
                                distance = distance,
                                height = height)
