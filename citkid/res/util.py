@@ -2,6 +2,7 @@ import numpy as np
 from numba import jit, vectorize
 from scipy import stats
 from scipy import signal
+from scipy.interpolate import interp1d
 
 def calc_qc_qi(qr, amp):
     """
@@ -116,7 +117,7 @@ def cardan(a, b, c, d):
         # three real roots: return the max
         return np.max(np.real(roots))
     else:
-        # one real root: return value with smalles imaginary component
+        # one real root: return value with smallest imaginary component
         return np.real(roots[np.argsort(np.abs(np.imag(roots)))][0])
 
 def get_peak_fwhm(x, y):
@@ -132,6 +133,15 @@ def get_peak_fwhm(x, y):
     peak_index (int): index of the peak
     fwhm (float): width in x units
     """
+    x, y = np.asarray(x), np.asarray(y)
+    ix = np.argsort(x)
+    x, y = x[ix], y[ix]
+    interp_factor = 10
+    x_interp = np.linspace(min(x), max(x), len(x) * interp_factor)
+    interp_func = interp1d(x, y, kind = 'cubic')
+    y_interp = interp_func(x_interp)
+    x, y = x_interp, y_interp
+
     peak_index, _ = signal.find_peaks(y, height = (max(y) + min(y)) / 8)
     if not len(peak_index):
         peak_index = len(y) // 2
@@ -139,5 +149,6 @@ def get_peak_fwhm(x, y):
     else:
         peak_index = peak_index[len(peak_index) // 2]
         width = signal.peak_widths(y, [peak_index], rel_height = 0.5)[0][0]
+
     fwhm = np.median(x[1:] - x[:-1]) * width
-    return peak_index, fwhm
+    return x[peak_index], y[peak_index], fwhm

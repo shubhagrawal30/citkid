@@ -26,9 +26,9 @@ def guess_p0_nonlinear_iq(f, z):
     # guess phi and amp
     phi_guess, amp_guess = guess_phi_amp(z, z0_guess)
     # guess Qr
-    Qr_guess = guess_Qr(f, z, z0_guess, phi_guess)
+    Qr_guess = guess_Qr(f, z, z0_guess, phi_guess, amp_guess)
     # guess a
-    a_guess = guess_a(f, z, Qr_guess)
+    a_guess = guess_a(f, z, z0_guess, phi_guess, amp_guess)
     # guess fr
     fr_guess = guess_fr(f, z, z0_guess, phi_guess, a_guess, Qr_guess)
     # Package and return p0
@@ -36,7 +36,7 @@ def guess_p0_nonlinear_iq(f, z):
           i0_guess, q0_guess, tau_guess]
     return p0
 
-def guess_Qr(f, z, z0, phi):
+def guess_Qr(f, z, z0, phi, amp):
     """
     Guesses Qr given complex S21 data.
 
@@ -50,38 +50,50 @@ def guess_Qr(f, z, z0, phi):
     Qr_guess (float): Qr guess
     """
     # rotate data, then filter
-    z_rot = abs((1 - z / z0) * np.exp(-1j * phi))
+    z_rot = (1 - z / z0) * np.exp(-1j * phi) * np.cos(phi) / amp
+    z_rot = abs(z_rot)
     z_rot = gaussian_filter(z_rot, sigma = 10)
-    peak, fwhm = get_peak_fwhm(f, z_rot)
-    poly = [-0.38741422, 15.38414659]
+    # Ensure that the data is upright
+    z_off = np.mean(np.roll(z_rot, 2)[:4])
+    ix = len(z_rot) // 2 - 2
+    z_on = np.mean(z_rot[ix: ix + 4])
+    if z_off > z_on:
+        z_rot = - z_rot
+    # Find the peak
+    xpeak, ypeak, fwhm = get_peak_fwhm(f, z_rot)
+    fwhm /= xpeak
+    poly = [-0.9466455 ,  1.77984571]
     Qr_guess = np.exp(np.polyval(poly, np.log(fwhm)))
     return Qr_guess
 
-def guess_a(f, z, Qr):
+def guess_a(f, z, z0, phi, amp):
     """
     Guesses the nonlinearity parameter
 
     Parameters:
     f (np.array): array of frequency data in Hz
     z (np.array): array of complex S21 data
-    Qr (float): guess for the total quality factor
+    z0 (complex): z value off resonance
+    phi (float): impedance mismatch angle
+    amp (float): Qr / Qc
 
     Returns:
     a_guess (float): nonlinearity parameter guess
     """
-    fdiff = np.mean([f[1:], f[:-1]], axis = 0)
-    zdiff = abs(z[1:] - z[:-1])
-    peak, width_spac = get_peak_fwhm(fdiff, zdiff)
-    fr = fdiff[peak]
+    z_rot = (1 - z / z0) * np.exp(-1j * phi) * np.cos(phi) / amp
+    y = np.abs(z_rot)
+    f0 = np.mean(f)
 
-    x = np.log(width_spac / fr * Qr)
-    if x < -3.43:
-        a_guess = 1
-    elif x > 0.17:
-        a_guess = 1e-2
-    else:
-        poly = [-0.05591812, -0.27491759, -0.5516617, 0.10680838]
-        a_guess = np.polyval(poly, x)
+    fdiff = np.mean([f[1:], f[:-1]], axis = 0)
+    ydiff = abs(np.diff(y))
+    ix = np.argmax(ydiff)
+    x = np.log10(ydiff[ix] / (fdiff[ix] / f0))
+
+    abin = [0.10108906, 0.18610557, 0.23268677, 0.25650679, 0.26075427,
+            0.27566617, 0.41724633, 0.7967761 , 1.4877537 , 1.27957197]
+    xbin = [-2.40119484, -2.12839025, -1.85358541, -1.56853632, -1.28790887,
+            -1.00483091, -0.73874667, -0.43417246, -0.18884461,  0.04564428]
+    a_guess = np.interp(x, xbin, abin)
     return a_guess
 
 def guess_fr(f, z, z0, phi, a, Qr):
@@ -105,8 +117,8 @@ def guess_fr(f, z, z0, phi, a, Qr):
     ix = np.argmax(zdiff)
     fr_guess = fdiff[ix]
     # Modification from nonlinearity parameter and Q
-    poly = [-1.04607392,  0.9999992]
-    fr_guess /= np.polyval(poly, a / Qr)
+    poly = [1.04085949, 5.08535056e-6]
+    fr_guess *= (np.polyval(poly, a / Qr) + 1) 
     return fr_guess
 
 

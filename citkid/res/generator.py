@@ -11,6 +11,7 @@ def get_random_dataset(normalize = False):
     Parameters:
     normalize (bool): If True, normalizes z by its mean
 
+<<<<<<< Updated upstream
     Returns:
     f (np.array): frequency array
     z (np.array): complex S21 array
@@ -32,6 +33,29 @@ def get_random_dataset(normalize = False):
     if normalize:
         z /= np.mean(np.abs(z))
     return f, z, resonances
+=======
+    fr, Qr = p[2], p[3]
+    span = np.random.uniform(2, 100) * fr / Qr
+    # # Rough sweep
+    # frough = np.linspace(fr - span / 2, fr + span / 2, 500)
+    # zrough = get_resonance_s21(frough, *p)
+    # f0 = update_fr_distance(frough, zrough)
+    d = fr / Qr * 0.1
+    f0 = np.random.uniform(fr - d, fr + d)
+    # Fine sweep
+    ffine = np.linspace(f0 - span / 2, f0 + span / 2, 500)
+    zfine = get_resonance_s21(ffine, *p)
+    fgain = np.linspace(f0 - 10 * span / 2, f0 + 10 * span / 2, 500)
+    zgain = get_resonance_s21(fgain, *p)
+    f0 = update_fr_distance(fgain, zgain)
+    znoise = np.zeros(nnoise_points, dtype = np.complex64)
+    if get_noise:
+        f = np.asarray([f0])
+        for i in range(nnoise_points):
+            znoise[i] = get_resonance_s21(f, *p)[0]
+    p = np.asarray(p[2:7])
+    return ffine, zfine, fgain, zgain, p, f0, znoise
+>>>>>>> Stashed changes
 
 @jit(nopython=True)
 def get_resonance_s21(f, fr, Qr, amp, phi, a):
@@ -87,8 +111,55 @@ def get_noise(f, std_dev):
 @jit(nopython=True)
 def get_system_z(f, cable_delay, a0, f0, sin_parameters, noise_std):
     """
+<<<<<<< Updated upstream
     Generates a system S21 with an exponential decay, cable delay, and
     sinusoidal ripples.
+=======
+    Creates random resonance parameters and noise parameters
+
+    Returns:
+    fr_noise_nstd (float): frequency noise number of standard deviations
+    amp_noise_nstd (float): amplitude noise number of standard deviations
+    p (list): nonlinear IQ model parameters
+    """
+    random = lambda low, high: np.random.uniform(low, high)
+    random_log = lambda low, high: np.exp(np.random.uniform(np.log(low),
+                                                            np.log(high)))
+    fr_noise_nstd  = random(-10, -7.3979400086720375)
+    fr_noise_nstd  = 10 ** fr_noise_nstd
+    amp_noise_nstd = random(-4.5, -2.3)
+    amp_noise_nstd = 10 ** amp_noise_nstd
+    fr = random(10e6, 6e9)
+    Qr = random_log(1e3, 1e6)
+    amp = random(1e-3, 1 - 1e-5)
+    phi = random(-np.pi / 2, np.pi / 2)
+    a = random(0, 2)
+
+    p_amp0 = random(-5e-21, 5e-21)
+    p_amp1 = random(-8e-8, 8e-8)
+    p_amp2 = random(-120, 20)
+    p_phase0 = -random_log(1e-9, 1e-8)
+    p_phase1 = random(-1, 1)
+    return fr_noise_nstd, amp_noise_nstd, fr, Qr, amp, phi, a,\
+           p_amp0, p_amp1, p_amp2, p_phase0, p_phase1
+
+@jit(nopython=True)
+def polyval(p, x):
+    """
+    Performs the same function as np.polyval, but with numba compatability
+    """
+    y = np.zeros_like(x)
+    for i in range(len(p)):
+        y = x * y + p[i]
+    return y
+
+@jit(nopython=True)
+def update_fr_distance(f, z):
+    """
+    Give a single resonator rough sweep dataset, return the updated resonance
+    frequency by finding the furthest point from the off-resonance data. This
+    function will perform better if the cable delay is first removed.
+>>>>>>> Stashed changes
 
     Parameters:
     f (np.array): frequency array
