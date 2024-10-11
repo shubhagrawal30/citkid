@@ -5,7 +5,8 @@ from citkid.res.funcs import get_y
 '''Code to generate random resonances for simulations'''
 
 @jit(nopython=True)
-def make_random_resonance_data(get_noise = False, nnoise_points = 1000):
+def make_random_resonance_data(get_noise = False, nnoise_points = 1000,
+                               fine_span_factor = 'random'):
     """
     Makes a dataset of a random resonator and returns the data with the actual
     resonator parameters
@@ -14,6 +15,8 @@ def make_random_resonance_data(get_noise = False, nnoise_points = 1000):
         get_noise (bool): if True, also returns a noise timestream that is white
             in the frequency and dissipation directions
         nnoise_points (int): number of points in the noise timestream
+        fine_span_factor (float): span = fine_span_factor * fr / Qr, or set to
+            'random' to choose a random factor between 2 and 100
     Returns:
         ffine (np.array): fine sweep frequency data in Hz
         zfine (np.array): fine sweep complex S21 data
@@ -26,7 +29,10 @@ def make_random_resonance_data(get_noise = False, nnoise_points = 1000):
     p = get_random_resonance_parameters()
 
     fr, Qr = p[2], p[3]
-    span = np.random.uniform(2, 100) * fr / Qr
+    if fine_span_factor == 'random':
+        span = np.random.uniform(2, 100) * fr / Qr
+    else:
+        span = fine_span_factor * fr / Qr
     # Rough sweep
     frough = np.linspace(fr - span / 2, fr + span / 2, 500)
     zrough = get_resonance_s21(frough, *p)

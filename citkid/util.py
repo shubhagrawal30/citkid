@@ -22,7 +22,7 @@ def fix_path(path):
     return fixed_path
 
 def save_fig(fig, filename, plot_directory, ftype = 'png',
-             tight_layout = False):
+             tight_layout = False, close_fig = True):
     """
     Saves a pyplot figure with standard settings
 
@@ -45,7 +45,8 @@ def save_fig(fig, filename, plot_directory, ftype = 'png',
         except Exception as e:
             plt.savefig(plot_directory + filename + '.' + ftype,
                         pad_inches = 0.05)
-        plt.close(fig)
+        if close_fig:
+            plt.close(fig)
 
 def save_figure_to_memory(fig):
     """
