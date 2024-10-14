@@ -1,7 +1,8 @@
 import numpy as np
 
 # Need to update docstrings, imports
-def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
+def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
+                plotq = False, resonator_indices = None, plot_directory = ''):
     """
     Update resonance frequencies given fine sweep data
 
@@ -18,6 +19,9 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
     qres (np.array or None): list of quality factors to cut if
         cut_other_resonators, or None. Cuts spans of fres / Qres from each
         sweep
+    plotq (bool): If True, plots all of the updated frequencies in batches
+    resonator_indices (array-like): resonator indices for plotting
+    plot_directory (str): directory to save plots
 
     Returns:
     fres_new (np.array): array of updated frequencies in Hz
@@ -44,6 +48,8 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
             fres_new.append(update(fi, zi))
         else:
             fres_new.append(np.mean(fi))
+    if plotq:
+        plot_update_fres(fs, zs, fres, qres, fcal_indices, resonator_indices)
     return np.array(fres_new)
 
 def update_fr_minS21(f, z):
@@ -121,5 +127,5 @@ def cut_fine_scan(f, z, fres, spans):
     for fr, sp in zip(fres, spans):
         ix = (np.abs(f - fr) > sp) | (np.abs(f - fr_keep) < sp_keep)
         f, z = f[ix], z[ix]
-    # Needs to leave the current scan 
+    # Needs to leave the current scan
     return f, z

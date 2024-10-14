@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.ticker as mtick
+from .plot import plot_update_fres
+from ..util import fix_path
 
 def plot_ares_opt(a_nls, fcal_indices):
     """
@@ -24,7 +26,7 @@ def plot_ares_opt(a_nls, fcal_indices):
         [a_nl[i] for i in range(len(a_nl)) if i not in fcal_indices]
         color = plt.cm.viridis(index / len(a_nls))
         if index == len(a_nls):
-            alpha = 0.8 
+            alpha = 0.8
         else:
             alpha = 0.5
         ax_hist.hist(a_nl, bins, label = index, edgecolor = color, color = color, alpha = alpha)
@@ -45,3 +47,33 @@ def plot_ares_opt(a_nls, fcal_indices):
         percents.append(percent)
     ax_opt.plot(indices, percents, '--k')
     return fig_hist, fig_opt
+
+def plot_update_fres(fs, zs, fres, fcal_indices, resonator_indices):
+    """
+    Plots the results of update_fres in batches
+
+    Parameters:
+    fs (array-like): fine sweep frequency data in Hz for each resonator in fres
+    zs (array-like): fine sweep complex S21 data for each resonator in fres
+    fres (np.array or None): list of resonance frequencies in Hz
+    fcal_indices (array-like): list of calibrations tone indices (index into
+        fs, zs, fres, Qres). Calibration tone frequencies will not be updated
+    resonator_indices (array-like): resonator indices for plotting
+    plot_directory (str): directory to save plots
+    """
+    fs, zs, fres = np.array(fs), np.array(zs), np.array(fres)
+    fcal_indices = np.array(fcal_indices)
+    resonator_indices = np.array(resonator_indices)
+    plot_directory = fix_path(plot_directory)
+    os.makedirs(plot_directory, exist_ok = True)
+    num_plots = len(fres)
+
+    plots_per_fig = 50
+    num_figs = (num_plots - 1) // plots_per_fig + 1
+
+    for fig_index in num_figs:
+        ix0, ix1 = fig_index * plots_per_fig, fig_index * (plots_per_fig + 1)
+        fs0, zs0 = fs0[ix0:ix1], zs0[ix0:ix1], fres[ix0:ix1]
+        # Left off here. I was debating about whether I should plot cal indices,
+        # but I think I should to make sure they don't overlap with other tones
+        # However, they should be a different color to be immediately recognizable

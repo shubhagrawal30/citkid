@@ -8,8 +8,7 @@ from ..multitone.plot import plot_ares_opt
 from ..util import save_fig
 import matplotlib.pyplot as plt
 from time import sleep
-    
-### This is a work in progress -> Don't try to use it yet
+
 async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
                   noise_time = 200, take_noise = False,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
@@ -44,10 +43,13 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     nnoise_timestreams (int): number of noise timestreams to take sequentially.
         Set to 0 to bypass noise acquisition
     fir_stage (int): fir_stage frequency downsampling factor.
-            6 ->   596.05 Hz 
-            5 -> 1,192.09 Hz 
-            4 -> 2,384.19 Hz, might crash 
-            3 -> will definetely crash 
+            6 ->   596.05 Hz
+            5 -> 1,192.09 Hz
+            4 -> 2,384.19 Hz, might crash
+            3 -> will definetely crash
+    fres_all (array-like): list of all frequencies for analysis, if fres is
+        incomplete
+    qres_all (array-like): array of span factors corresponding to fres_all
     """
     data_path = 'tmp/parser_data_00/'
     if os.path.exists(data_path) and take_noise:
@@ -69,15 +71,15 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     if fres_all is not None:
         np.save(out_directory + f'fres_all{file_suffix}.npy', ares)
         np.save(out_directory + f'qres_all{file_suffix}.npy', ares)
-    # Make qres for sweeps that works with cal tones 
-    qres0 = qres.copy() 
+    # Make qres for sweeps that works with cal tones
+    qres0 = qres.copy()
     qres0[fcal_indices] = np.median(qres)
     # write initial target comb
     await inst.write_tones(1, fres, ares)
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
-        f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_rough, 
+        f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_rough,
                                      nsamps = nsamps, verbose = True, pbar_description = 'Rough sweep')
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
@@ -98,7 +100,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Noise
-    if take_noise:    
+    if take_noise:
         filename = f'noise{file_suffix}_00.npy'
         z = await inst.capture_noise(1, fres, ares, noise_time, fir_stage = fir_stage,
                                 parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
@@ -108,8 +110,75 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
         filename = f'noise{file_suffix}_tsample_00.npy'
         np.save(out_directory + filename, 1 / fsample_noise)
 
+async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, out_directory,
+                           file_suffix, npoints = 600, nsamps = 10,
+                           fres_all = None, qres_all = None):
+    """
+    Takes a single rough IQ sweep for updating frequencies
+
+    Parameters:
+    inst (multitone instrument): initialized multitone instrument class, with
+        'sweep', 'write_tones', and 'capture_noise' methods
+    fres (np.array): array of resonance frequencies in Hz
+    ares (np.array): array of amplitudes in RFSoC units
+    qres (np.array): array of span factors for cutting out of adjacent datasets.
+        Resonances should span fres / qres
+    fcal_indices (np.array): indices (into fres, ares, qres) of calibration tones
+    out_directory (str): directory to save the data
+    file_suffix (str): suffix for file names
+    noise_time (float or None): noise timestream length in seconds
+    if_bw (float): IF bandwidth. 1 / if_bw is the averaging time per data point
+        in the IQ loops
+    fine_bw (float): fine sweep bandwidth in Hz. Gain bandwidth is 10 X fine
+        bandwidth
+    rough_bw (float): rough sweep bandwidth in Hz
+    npoints_fine (int): number of points per resonator in the fine sweep
+    npoints_gain (int): number of points per resonator in the gain sweep
+    npoints_rough (int): number of points per resonator in the rough sweep
+    take_rough_sweep (bool): if True, first takes a rough sweep and optimizes
+        the tone frequencies
+    fres_update_method (str): method for updating the tone frequencies, if
+        take_rough_sweep is True. See .fres.update_fres for methods
+    nnoise_timestreams (int): number of noise timestreams to take sequentially.
+        Set to 0 to bypass noise acquisition
+    fir_stage (int): fir_stage frequency downsampling factor.
+            6 ->   596.05 Hz
+            5 -> 1,192.09 Hz
+            4 -> 2,384.19 Hz, might crash
+            3 -> will definetely crash
+    """
+    fres = np.asarray(fres, dtype = float)
+    ares= np.asarray(ares, dtype = float)
+    qres = np.asarray(qres, dtype = float)
+    fcal_indices = np.asarray(fcal_indices, dtype = int)
+    spans = fres / qres
+    if file_suffix != '':
+        file_suffix = '_' + file_suffix
+    np.save(out_directory + f'fres_initial{file_suffix}.npy', fres)
+    np.save(out_directory + f'ares{file_suffix}.npy', ares)
+    np.save(out_directory + f'qres{file_suffix}.npy', qres)
+    np.save(out_directory + f'fcal_indices{file_suffix}.npy',
+            fcal_indices)
+    if fres_all is not None:
+        np.save(out_directory + f'fres_all{file_suffix}.npy', ares)
+        np.save(out_directory + f'qres_all{file_suffix}.npy', ares)
+    # Make qres for sweeps that works with cal tones
+    qres0 = qres.copy()
+    qres0[fcal_indices] = np.median(qres)
+    # write initial target comb
+    await inst.write_tones(1, fres, ares)
+    # rough sweep
+    filename = f's21_rough{file_suffix}.npy'
+    f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_rough,
+                                 nsamps = nsamps, verbose = True,
+                                 pbar_description = 'Rough sweep')
+    np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
+    fres = update_fres(f, z, fres, spans, fcal_indices,
+                        method = fres_update_method)
+    np.save(out_directory + f'fres_interim_{file_suffix}.npy', fres)
+
 # Haven't started adapting this one yet
-async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, 
+async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
                         dbm_max = -50, a_target = 0.5, n_iterations = 10, n_addonly = 3,
                         fres_update_method = 'distance',
                         npoints_gain = 50, npoints_fine = 400, plot_directory = None,
@@ -139,7 +208,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
         running. If None, doesn't save plots
     verbose (bool): if True, displays a progress bar of the iteration number
     N_accums (int): number of accumulations for the target sweeps
-    threshold (float): optimization will occur within (1-threshold) and 
+    threshold (float): optimization will occur within (1-threshold) and
         (1+threshold) of the target during the addonly phase of power optimization
     """
     if plot_directory is not None:
