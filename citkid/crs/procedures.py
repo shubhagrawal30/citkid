@@ -75,11 +75,11 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     qres0 = qres.copy()
     qres0[fcal_indices] = np.median(qres)
     # write initial target comb
-    await inst.write_tones(1, fres, ares)
+    await inst.write_tones(fres, ares)
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
-        f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_rough,
+        f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_rough,
                                      nsamps = nsamps, verbose = True, pbar_description = 'Rough sweep')
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
@@ -89,22 +89,22 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    f, z = await inst.sweep_qres(1, fres, ares, qres0 / 10, npoints = npoints_gain, nsamps = nsamps,
+    f, z = await inst.sweep_qres(fres, ares, qres0 / 10, npoints = npoints_gain, nsamps = nsamps,
                                    verbose = True, pbar_description = 'Gain sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
-    f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_fine, nsamps = nsamps,
+    f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_fine, nsamps = nsamps,
                                    verbose = True, pbar_description = 'Fine sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Noise
     if take_noise:
         filename = f'noise{file_suffix}_00.npy'
-        z = await inst.capture_noise(1, fres, ares, noise_time, fir_stage = fir_stage,
+        z = await inst.capture_noise(fres, ares, noise_time, fir_stage = fir_stage,
                                 parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
-                                interface='enp2s0', delete_parser_data = True)
+                                interface='enp2s0', delete_parser_data = True, verbose = verbose)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
         fsample_noise = inst.sample_frequency
         filename = f'noise{file_suffix}_tsample_00.npy'
@@ -166,10 +166,10 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, out_directory,
     qres0 = qres.copy()
     qres0[fcal_indices] = np.median(qres)
     # write initial target comb
-    await inst.write_tones(1, fres, ares)
+    await inst.write_tones(fres, ares)
     # rough sweep
     filename = f's21_rough{file_suffix}.npy'
-    f, z = await inst.sweep_qres(1, fres, ares, qres0, npoints = npoints_rough,
+    f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_rough,
                                  nsamps = nsamps, verbose = True,
                                  pbar_description = 'Rough sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
