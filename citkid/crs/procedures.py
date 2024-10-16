@@ -9,11 +9,11 @@ from ..util import save_fig
 import matplotlib.pyplot as plt
 from time import sleep
 
-async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
-                  noise_time = 200, take_noise = False,
+async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
+                  noise_time = 200, take_noise = False, 
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
                   take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
-                  fres_all = None, qres_all = None, verbose = True):
+                  fres_all = None, qres_all = None, verbose = True, cable_delay = 0):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -68,6 +68,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     np.save(out_directory + f'qres{file_suffix}.npy', qres)
     np.save(out_directory + f'fcal_indices{file_suffix}.npy',
             fcal_indices)
+    np.save(out_directory + f'res_indices{file_suffix}.npy', res_indices)
     if fres_all is not None:
         np.save(out_directory + f'fres_all{file_suffix}.npy', ares)
         np.save(out_directory + f'qres_all{file_suffix}.npy', ares)
@@ -83,7 +84,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
                                      nsamps = nsamps, verbose = verbose, pbar_description = 'Rough sweep')
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
-                            method = fres_update_method)
+                            method = fres_update_method, cable_delay = cable_delay)
         await inst.write_tones(fres, ares)
     np.save(out_directory + f'fres{file_suffix}.npy', fres)
 
@@ -110,9 +111,10 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
         filename = f'noise{file_suffix}_tsample_00.npy'
         np.save(out_directory + filename, 1 / fsample_noise)
 
-async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, out_directory,
-                           file_suffix, npoints = 600, nsamps = 10,
-                           fres_all = None, qres_all = None):
+async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,
+                           file_suffix, npoints = 600, nsamps = 10, plot_directory = '',
+                           fres_all = None, qres_all = None, plotq = False, fres_update_method = 'distance',
+                           cable_delay = 0):
     """
     Takes a single rough IQ sweep for updating frequencies
 
@@ -147,6 +149,9 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, out_directory,
             4 -> 2,384.19 Hz, might crash
             3 -> will definetely crash
     """
+    for d in (plot_directory, out_directory):
+        if d != '':
+            os.makedirs(d, exist_ok = True)
     fres = np.asarray(fres, dtype = float)
     ares= np.asarray(ares, dtype = float)
     qres = np.asarray(qres, dtype = float)
@@ -159,6 +164,7 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, out_directory,
     np.save(out_directory + f'qres{file_suffix}.npy', qres)
     np.save(out_directory + f'fcal_indices{file_suffix}.npy',
             fcal_indices)
+    np.save(out_directory + f'res_indices{file_suffix}.npy', res_indices)
     if fres_all is not None:
         np.save(out_directory + f'fres_all{file_suffix}.npy', ares)
         np.save(out_directory + f'qres_all{file_suffix}.npy', ares)
@@ -169,13 +175,15 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, out_directory,
     await inst.write_tones(fres, ares)
     # rough sweep
     filename = f's21_rough{file_suffix}.npy'
-    f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_rough,
+    f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints,
                                  nsamps = nsamps, verbose = True,
                                  pbar_description = 'Rough sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
     fres = update_fres(f, z, fres, spans, fcal_indices,
-                        method = fres_update_method)
-    np.save(out_directory + f'fres_interim_{file_suffix}.npy', fres)
+                        method = fres_update_method, plotq = plotq, res_indices = res_indices, 
+                        plot_directory = plot_directory, cable_delay = cable_delay)
+    np.save(out_directory + f'fres_interim_{file_suffix}.npy', fres) 
+
 
 # Haven't started adapting this one yet
 async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
@@ -268,7 +276,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
 ######################### Utility functions ####################################
 ################################################################################
 def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
-                   resonator_indices = None, fcal_power = -55):
+                   res_indices = None, fcal_power = -55):
     '''
     Adds calibration tones to the given resonator list. Fills in largest spaces
     between resonators, up to max_n_tones.
@@ -278,7 +286,7 @@ def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
     ares (np.array): amplitude array in Hz
     qres (np.array): span factor array
     max_n_tones (int): maximum number of tones after adding cal tones
-    resonator_indices (np.array or None): resonator indices corresponding to
+    res_indices (np.array or None): resonator indices corresponding to
         fres
     fcal_power (float): calibration tone power, in the same units as ares
 
@@ -286,7 +294,7 @@ def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
     fres, ares, qres (np.array): frequency, amplitude, and span factor arrays
         with calibration tones added
     fcal_indices (np.array): calibration tone indices into fres, ares, qres
-    new_resonator_indices (np.array): new resonator index list with the new
+    new_res_indices (np.array): new resonator index list with the new
         calibration tones. Calibration tone resonator indices are negative
     '''
     fres = np.asarray(fres, dtype = float)
@@ -294,12 +302,12 @@ def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
     qres = np.asarray(qres, dtype = float)
     ix = np.argsort(fres)
     fres, ares, qres = fres[ix], ares[ix], qres[ix]
-    if resonator_indices is not None:
-        resonator_indices = np.asarray(resonator_indices)
-        resonator_indices = resonator_indices[ix]
-    if resonator_indices is None:
-        resonator_indices = np.asarray(range(len(fres)))
-    new_resonator_indices = np.asarray(resonator_indices, dtype = int)
+    if res_indices is not None:
+        res_indices = np.asarray(res_indices)
+        res_indices = res_indices[ix]
+    if res_indices is None:
+        res_indices = np.asarray(range(len(fres)))
+    new_res_indices = np.asarray(res_indices, dtype = int)
 
     ix = np.flip(np.argsort(np.diff(fres)))[:max_n_tones - len(fres)]
     fcal = np.sort([np.mean(fres[i:i+2]) for i in ix])
@@ -310,6 +318,6 @@ def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
         ares = np.insert(ares, fres_index, fcal_power)
         qres = np.insert(qres, fres_index, np.inf)
         new_index = -fcal_index
-        new_resonator_indices = np.insert(new_resonator_indices, fres_index,
+        new_res_indices = np.insert(new_res_indices, fres_index,
                                           new_index)
-    return fres, ares, qres, fcal_indices, new_resonator_indices
+    return fres, ares, qres, fcal_indices, new_res_indices

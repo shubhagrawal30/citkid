@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.ticker as mtick
-from ..util import fix_path
+from ..util import fix_path, save_fig
+import os 
 
 def plot_ares_opt(a_nls, fcal_indices):
     """
@@ -47,7 +48,7 @@ def plot_ares_opt(a_nls, fcal_indices):
     ax_opt.plot(indices, percents, '--k')
     return fig_hist, fig_opt
 
-def plot_update_fres(fs, zs, fres, fcal_indices, resonator_indices):
+def plot_update_fres(fs, zs, fres, fcal_indices, res_indices, cable_delay, plot_directory):
     """
     Plots the results of update_fres in batches
 
@@ -57,22 +58,62 @@ def plot_update_fres(fs, zs, fres, fcal_indices, resonator_indices):
     fres (np.array or None): list of resonance frequencies in Hz
     fcal_indices (array-like): list of calibrations tone indices (index into
         fs, zs, fres, Qres). Calibration tone frequencies will not be updated
-    resonator_indices (array-like): resonator indices for plotting
+    res_indices (array-like): resonator indices for plotting
     plot_directory (str): directory to save plots
     """
     fs, zs, fres = np.array(fs), np.array(zs), np.array(fres)
     fcal_indices = np.array(fcal_indices)
-    resonator_indices = np.array(resonator_indices)
+    res_indices = np.array(res_indices)
     plot_directory = fix_path(plot_directory)
     os.makedirs(plot_directory, exist_ok = True)
     num_plots = len(fres)
 
-    plots_per_fig = 50
+    plots_per_fig = 100
+    max_n_cols = 4
     num_figs = (num_plots - 1) // plots_per_fig + 1
 
-    for fig_index in num_figs:
-        ix0, ix1 = fig_index * plots_per_fig, fig_index * (plots_per_fig + 1)
-        fs0, zs0 = fs0[ix0:ix1], zs0[ix0:ix1], fres[ix0:ix1]
-        # Left off here. I was debating about whether I should plot cal indices,
-        # but I think I should to make sure they don't overlap with other tones
-        # However, they should be a different color to be immediately recognizable
+    for fig_index in range(num_figs):
+        ix0, ix1 = fig_index * plots_per_fig, (fig_index + 1) * plots_per_fig
+        fs0, zs0, fres0 = fs[ix0:ix1], zs[ix0:ix1], fres[ix0:ix1]
+        rs0 = res_indices[ix0:ix1]
+
+        data_indices = np.arange(ix0, ix1, 1)
+
+        naxs = len(fs0) 
+        nrows = naxs // max_n_cols
+        len_last_row = naxs % max_n_cols  
+        if len_last_row > max_n_cols or len_last_row == 0:
+            ncols = max_n_cols 
+        else:
+            ncols = len_last_row
+        fig, axs = plt.subplots(nrows, ncols * 2, figsize = [6 * ncols, 2.5 * nrows],
+                            layout = 'tight')
+        ax_pairs = [[axs[row][2 * column], axs[row][2 * column + 1]] for row in range(len(axs)) for column in range(int(len(axs[0]) / 2))]
+        for index, (ax1, ax0) in enumerate(ax_pairs):
+            # ax1.set(ylabel = 'Q', xlabel = 'I') 
+            ax1.set_yticks([])
+            ax1.set_xticks([])
+            pos1 = ax1.get_position()
+            # ax1.set_position([pos1.x0 - 0.04, pos1.y0, pos1.width, pos1.height])
+            ax0.set(ylabel = r'$|S_{21}| (dB)') 
+
+            f, z, fr = fs0[index], zs0[index], fres0[index] 
+            ri = rs0[index]
+            ax1.set(title = f'Fn {ri}')
+            data_ix = data_indices[index] 
+            dB = 20 * np.log10(np.abs(z)) 
+
+            f0 = np.mean(f) 
+            ax0.set(xlabel = f'(f - {int(round(fr / 1e3, 0))}) kHz') 
+
+            if data_ix in fcal_indices:
+                color = plt.cm.viridis(0.667) 
+            else:
+                color = plt.cm.viridis(0.) 
+            ax0.plot((f - f0) / 1e3, dB, color = color) 
+            ax1.plot(np.real(z), np.imag(z), '.', color = color)
+            ax0.axvline((fr - f0) / 1e3, linestyle = '--', color = 'k') 
+            ix = np.argmin(np.abs(f - fr))
+            ax1.plot(np.real(z[ix]), np.imag(z[ix]), 'xk', markersize = 20)
+        save_fig(fig, f'fres_update_{fig_index}', plot_directory, ftype = 'png',
+                            tight_layout = False, close_fig = True)

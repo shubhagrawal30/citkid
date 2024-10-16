@@ -255,26 +255,36 @@ class CRS:
         f, z = f[ix], z[ix]
         return f, z
 
-    async def capture_fast_noise(self, frequency, amplitude, time):
+    async def capture_fast_noise(self, frequency, amplitude, time, verbose = False):
         """ 
         Captures noise with a 2.44 MHz sample rate on a single channel. Turns on only 
         a single channel to avoid noise spikes from neighboring channels. Note that 
         the output will have to be corrected for the nonlinear PFB bin after taking a 
         PSD. It is harder to correct the timestream so single-photon events and 
         cosmic rays will not have the correct shape. 
-
-        Need to increment NCO to make sure frequency is in the middle of PFB bin 
+        Temporarily changes the NCO frequency to center the tone on a PFB bin 
         
         Parameters:
         frequency (float): tone frequency in Hz 
         amplitude (float): tone amplitude in dBm 
         nsamps (int): number of samples. Max is 1e6
+        verbose (bool): if True, prints NCO frequency settings 
         """
         module_index = min(self.nco_freq_dict, key = lambda k: np.abs(self.nco_freq_dict[k] - frequency)) 
         if np.abs(frequency - self.nco_freq_dict[module_index] > 300e6):
             raise ValueError('Frequency must be within 300 MHz of an NCO frequency') 
         fsample = 625e6 / 256
         nsamps = int(time * fsample) 
+        # Adjust NCO to center the frequency on a PFB bin to minimize nonlinearity
+        comb_sampling_freq = 625e6
+        bin_centers = np.arange(-256, 256, 1) * comb_sampling_freq / 512
+        nco_freq0 = self.nco_freq_dict[module_index] 
+        frd = frequency - nco_freq0
+        ix = np.argmin(np.abs(frd - bin_centers)) 
+        center_offset_freq = frd - bin_centers[ix] 
+        nco_freq_dict_temp = {module_index: nco_freq0 + center_offset}
+        self.set_nco(nco_freq_dict_temp, verbose = verbose)
+        # Write tones and get noise 
         await self.write_tones([frequency], [amplitude])
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
         sleep(1)
@@ -298,6 +308,9 @@ class CRS:
 
         # Max of nsamps is 1e5 
         z = remove_internal_phaseshift(frequency, zraw, zcal) * self.volts_per_roc
+        # Adjust NCO back to its original value 
+        nco_freq_dict_temp = {module_index: nco_freq0}
+        self.set_nco(nco_freq_dict_temp, verbose = verbose)
         return fraw, z
 
     async def capture_noise(self, fres, ares, noise_time, fir_stage = 6,
@@ -351,7 +364,8 @@ class CRS:
         modules = list(self.ch_ix_dict.keys())
         await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).get_noise_cal(self.fres_dict)
         sleep(0.1)
-        raise Exception('Make this sleep statement longer')
+        # sleep(10)
+        # raise Exception('Make this sleep statement longer')
         # Collect the data 
         num_samps = int(self.sample_frequency*(noise_time + 10))
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
@@ -380,76 +394,12 @@ class CRS:
         zraw = np.array([zi[:data_len] for zi in zraw])
         if delete_parser_data:
             shutil.rmtree('tmp/')
+
+        z /= 10 ** (ares[:, np.newaxis] / 20)
+        if self.splitter:
+            z /= 10 ** (-10.5 * 2 / 20) 
         if return_raw:
             return z, zcal, zraw 
-        return z
-    
-    async def capture_noise_single(self, module, fres, ares, noise_time, fir_stage = 6,
-                            parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
-                            interface='enp2s0', delete_parser_data = False,
-                            verbose = True, return_raw = False):
-        """
-        Captures a noise timestream using the parser.
-        
-        Parameters:
-        module (int): module index 
-        fres (array-like): tone frequencies in Hz 
-        ares (array-like): tone amplitudes in dBm 
-        fir_stage (int): fir_stage frequency downsampling factor.
-            6 ->   596.05 Hz 
-            5 -> 1,192.09 Hz 
-            4 -> 2,384.19 Hz, will drop some packets
-        parser_loc (str): path to the parser file 
-        data_path (str): path to the data output file for the parser 
-        interface (str): Ethernet interface identifier 
-        delete_parser_data (bool): If True, deletes the parser data files 
-            after importing the data 
-        
-        Returns:
-        """
-        if fir_stage <= 4:
-            warning (f"packets will drop if fir_stage < 5", UserWarning)
-        fres, ares = np.asarray(fres), np.asarray(ares) 
-        os.makedirs('tmp/', exist_ok = True)
-        data_path = 'tmp/parser_data_00/'
-        if os.path.exists(data_path):
-            raise FileExistsError(f'{data_path} already exists')
-        # set fir stage
-        await self.d.set_fir_stage(fir_stage) # Probably will drop packets after 4
-        # get_samples will error if fir_stage is too low, but parser will not error
-        self.sample_frequency = 625e6 / (256 * 64 * 2 ** fir_stage) 
-        print(f'fir stage is {await self.d.get_fir_stage()}')
-
-        
-        # set the tones
-        await self.write_tones(fres, ares)
-        await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
-        sleep(1)
-        # Get calibration data
-        await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module) 
-        samples_cal = await self.d.get_samples(21, module=module)
-        zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-        zcal = np.mean(zcal[:len(fres), 1:], axis = 1)
-        await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module)
-        np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
-        sleep(0.1)
-        # Collect the data 
-        num_samps = int(self.sample_frequency*noise_time)
-        parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
-                                   f'{self.crs_sn:04d}', '-m', str(module), '-n', str(num_samps)], 
-                                   shell=False)
-        pbar = list(range(int(noise_time) + 2))
-        if verbose:
-            pbar = tqdm(pbar, leave = False)
-        for i in pbar:
-            sleep(1) 
-        # read the data and convert to z
-        zraw = convert_parser_to_z(data_path, self.crs_sn, module, ntones = len(fres))
-        z = remove_internal_phaseshift(fres[:, np.newaxis], zraw, zcal[:, np.newaxis])
-        if delete_parser_data:
-            shutil.rmtree('tmp/')
-        if return_raw:
-            return z, zcal, zraw
         return z
     
 ######################################################################################################

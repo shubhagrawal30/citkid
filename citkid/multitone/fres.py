@@ -3,7 +3,7 @@ from .plot import plot_update_fres
 
 # Need to update docstrings, imports
 def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
-                cable_delay = 0, plotq = False, resonator_indices = None, 
+                cable_delay = 0, plotq = False, res_indices = None, 
                 plot_directory = ''):
     """
     Update resonance frequencies given fine sweep data
@@ -24,7 +24,7 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
         cut_other_resonators, or None. Cuts spans of fres / Qres from each
         sweep
     plotq (bool): If True, plots all of the updated frequencies in batches
-    resonator_indices (array-like): resonator indices for plotting
+    res_indices (array-like): resonator indices for plotting
     plot_directory (str): directory to save plots
 
     Returns:
@@ -54,7 +54,7 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
         else:
             fres_new.append(np.mean(fi))
     if plotq:
-        plot_update_fres(fs, zs, fres, qres, fcal_indices, resonator_indices)
+        plot_update_fres(fs, zs, fres, fcal_indices, res_indices, cable_delay, plot_directory)
     return np.array(fres_new)
 
 def update_fr_minS21(f, z):
