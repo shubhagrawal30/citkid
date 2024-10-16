@@ -13,7 +13,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
                   noise_time = 200, take_noise = False,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
                   take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
-                  fres_all = None, qres_all = None):
+                  fres_all = None, qres_all = None, verbose = True):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -80,23 +80,23 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, fil
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
         f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_rough,
-                                     nsamps = nsamps, verbose = True, pbar_description = 'Rough sweep')
+                                     nsamps = nsamps, verbose = verbose, pbar_description = 'Rough sweep')
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
                             method = fres_update_method)
-        await inst.write_tones(1, fres, ares)
+        await inst.write_tones(fres, ares)
     np.save(out_directory + f'fres{file_suffix}.npy', fres)
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
     f, z = await inst.sweep_qres(fres, ares, qres0 / 10, npoints = npoints_gain, nsamps = nsamps,
-                                   verbose = True, pbar_description = 'Gain sweep')
+                                   verbose = verbose, pbar_description = 'Gain sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
     f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_fine, nsamps = nsamps,
-                                   verbose = True, pbar_description = 'Fine sweep')
+                                   verbose = verbose, pbar_description = 'Fine sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Noise

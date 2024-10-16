@@ -39,28 +39,6 @@ def remove_internal_phaseshift(f, z, zcal):
     zcor = z * adj
     return zcor 
 
-def remove_internal_phaseshift_noise(f, z, ffine, zfine):
-    """
-    Corrects measured samples by the corresponding loopback measurement for 
-    a noise measurement. 
-    
-    Parameters:
-    f (array-like): frequency array 
-    z (array-like): complex S21 data array from the ADC 
-    ffine (array-like): fine S21 sweep 
-    zfine (array-like): 
-    
-    Returns:
-    zcor (np.array): z corrected for the carrier calibration data 
-    """ 
-    z = remove_internal_phaseshift(f, z, 0 + 0j)
-    p = np.angle(np.mean(z, axis = 1))[:, np.newaxis]
-    pfine = np.angle(zfine) 
-    pcal = np.array([[np.interp(fi, ff, pf)]for fi, ff, pf in zip(f.flatten(), ffine, pfine)])
-    z = z * np.exp(1j * (pcal - p)) 
-    return z 
-
-
 def convert_parser_to_z(path, crs_sn, module, ntones):
     """
     Import a parser file and convert the data to complex S21 in V 
@@ -76,8 +54,7 @@ def convert_parser_to_z(path, crs_sn, module, ntones):
     parser_batch_file ='m0%d_raw32'%(module)
     parser_dat = np.fromfile(os.path.join(path, f'serial_{crs_sn:04d}', parser_batch_file), 
                                 np.dtype([('i', np.int32), ('q', np.int32)]))
-    z = np.array([complex(*pi) for pi in parser_dat]) 
-    print(len(z), ntones)
+    z = np.array([complex(*pi) for pi in parser_dat])
     z = np.array([z[i::1024] for i in range(ntones)])
     z = z * volts_per_roc / 256 # parser has additional factor of 256
     return z

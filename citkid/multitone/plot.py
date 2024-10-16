@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.ticker as mtick
-from .plot import plot_update_fres
 from ..util import fix_path
 
 def plot_ares_opt(a_nls, fcal_indices):

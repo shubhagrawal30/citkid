@@ -1,8 +1,10 @@
 import numpy as np
+from .plot import plot_update_fres
 
 # Need to update docstrings, imports
 def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
-                plotq = False, resonator_indices = None, plot_directory = ''):
+                cable_delay = 0, plotq = False, resonator_indices = None, 
+                plot_directory = ''):
     """
     Update resonance frequencies given fine sweep data
 
@@ -14,7 +16,9 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
     method (str): 'mins21' to update using the minimum of |S21|. 'spacing' to
         update using the maximum spacing between adjacent IQ points. 'distance'
         to update using the point of furthest distance from the off-resonance
-        point. 'none' to return fres.
+        point. 'none' to return fres
+    cable_delay (float): cable delay in seconds to remove before updating the 
+        frequency 
     fres (np.array or None): list of resonance frequencies in Hz
     qres (np.array or None): list of quality factors to cut if
         cut_other_resonators, or None. Cuts spans of fres / Qres from each
@@ -27,6 +31,7 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
     fres_new (np.array): array of updated frequencies in Hz
     """
     fs, zs = np.asarray(fs), np.asarray(zs)
+    zs *= np.exp(1j * 2 * np.pi * fs * cable_delay)
     fres, qres = np.asarray(fres), np.asarray(qres)
     fcal_indices = np.asarray(fcal_indices)
     if method == 'none':
