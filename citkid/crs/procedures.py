@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from time import sleep
 
 async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
-                  noise_time = 200, take_noise = False, 
+                  noise_time = 200, take_noise = False, gain_span_factor = 10,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
                   take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
                   fres_all = None, qres_all = None, verbose = True, cable_delay = 0):
@@ -90,7 +90,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    f, z = await inst.sweep_qres(fres, ares, qres0 / 10, npoints = npoints_gain, nsamps = nsamps,
+    f, z = await inst.sweep_qres(fres, ares, qres0 / gain_span_factor, npoints = npoints_gain, nsamps = nsamps,
                                    verbose = verbose, pbar_description = 'Gain sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
@@ -186,7 +186,7 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, ou
 
 
 # Haven't started adapting this one yet
-async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
+async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res_indices,
                         dbm_max = -50, a_target = 0.5, n_iterations = 10, n_addonly = 3,
                         fres_update_method = 'distance',
                         npoints_gain = 50, npoints_fine = 400, plot_directory = None,
@@ -231,7 +231,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices,
         if verbose:
             pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
-        await take_iq_noise(inst, fres, ares, qres, fcal_indices, out_directory, file_suffix,
+        await take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
                             take_noise = False, take_rough_sweep = False, npoints_gain = npoints_gain,
                             npoints_fine = npoints_fine, nsamps = nsamps)
 
@@ -317,7 +317,7 @@ def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
         fres = np.insert(fres, fres_index, fcal[fcal_index])
         ares = np.insert(ares, fres_index, fcal_power)
         qres = np.insert(qres, fres_index, np.inf)
-        new_index = -fcal_index
+        new_index = -fcal_index - 1
         new_res_indices = np.insert(new_res_indices, fres_index,
                                           new_index)
     return fres, ares, qres, fcal_indices, new_res_indices

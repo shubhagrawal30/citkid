@@ -1,5 +1,5 @@
-import sys
-sys.path.append('/home/daq1/github/rfmux/')
+# import sys
+# sys.path.append('/home/daq1/github/rfmux/')
 
 import os
 import rfmux
@@ -34,7 +34,8 @@ class CRS:
         self.d.volts_per_roc = volts_per_roc
         self.nco_freq_dict = {}
         
-    async def configure_system(self, clock_source="SMA", full_scale_dbm = 1, verbose = True):
+    async def configure_system(self, clock_source="SMA", full_scale_dbm = 1, analog_bank_high = False,
+                               verbose = True):
         """
         Resolves the system, sets the timestamp port, sets the clock source, and sets the full scale
         in dBm 
@@ -43,6 +44,7 @@ class CRS:
         clock_source (str): clock source specification. 'VCXO' for the internal voltage controlled
             crystal oscillator or 'SMA' for the external 10 MHz reference (5 Vpp I think) 
         full_scale_dbm (int): full scale power in dBm. range is [???, 7?]
+        analog_bank_high (bool): if True, uses modules 1-4 = DAC/ADC 5-8. Else uses modules 1-4 = DAC/ADC 1-4
         verbose (bool): If True, gets and prints the clocking source 
         """
         await self.d.resolve()
@@ -63,6 +65,8 @@ class CRS:
             print('System configured')
             print("Clocking source is", await self.d.get_clock_source())
 
+        await self.d.set_analog_bank(high = analog_bank_high)
+
     async def set_nco(self, nco_freq_dict, verbose = True):
         """Set the NCO frequency
         
@@ -80,7 +84,7 @@ class CRS:
             self.nco_freq_dict[key] = value 
             if verbose:
                 print(f'Module {key} NCO is {round(value * 1e-6, 6)} MHz') 
-
+        
     async def write_tones(self, fres, ares):
         """
         Writes an array of tones given frequencies and amplitudes. Splits the 
@@ -343,7 +347,7 @@ class CRS:
         module_indices = list(self.nco_freq_dict.keys()) 
         modules = [self.d.modules[module_index - 1] for module_index in module_indices] 
         if fir_stage <= 4:
-            warning (f"packets will drop if fir_stage < 5", UserWarning)
+            warnings.warn(f"packets will drop if fir_stage < 5", UserWarning)
         fres, ares = np.asarray(fres), np.asarray(ares) 
         os.makedirs('tmp/', exist_ok = True)
         data_path = 'tmp/parser_data_00/'
@@ -351,7 +355,7 @@ class CRS:
             raise FileExistsError(f'{data_path} already exists')
         # set fir stage
         await self.d.set_fir_stage(fir_stage) # Probably will drop packets after 4
-        # get_samples will error if fir_stage is too low, but parser will not error
+        # py_get_samples will error if fir_stage is too low, but parser will not error
         self.sample_frequency = 625e6 / (256 * 64 * 2 ** fir_stage) 
         if verbose:
             print(f'fir stage is {await self.d.get_fir_stage()}')
@@ -514,17 +518,17 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, nsamps = 10,
                     f = frequencies[ch, sweep_index]
                     ctx.set_frequency(f - nco_freq, d.UNITS.HZ, ch + 1, module = module_index)
                 await ctx()
-
+            nsamples_discard = 0
             # take data and loopback calibration data
             await d.set_dmfd_routing(d.ROUTING.CARRIER, module_index)
-            samples_cal = await d.get_samples(21, module = module_index )
+            samples_cal = await d.py_get_samples(20 + nsamples_discard, module = module_index )
             await d.set_dmfd_routing(d.ROUTING.ADC, module_index)
-            samples = await d.get_samples(nsamps + 1,module = module_index)
+            samples = await d.py_get_samples(nsamps + nsamples_discard,module = module_index)
             # format and average data 
             zi = np.asarray(samples.i) + 1j * np.asarray(samples.q)
-            zi = np.mean(zi[:n_channels, 1:] , axis = 1)
+            zi = np.mean(zi[:n_channels, nsamples_discard:] , axis = 1)
             zical = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-            zical = np.mean(zical[:n_channels, 1:], axis = 1)
+            zical = np.mean(zical[:n_channels, nsamples_discard:], axis = 1)
             # adjust for loopback calibration
             zcal[:, sweep_index] = zical 
             zraw[:, sweep_index] = zi 
@@ -549,10 +553,11 @@ async def get_noise_cal(module, fres_dict):
     module_index = module.module 
     fres = np.asarray(fres_dict[module_index])
     # Get calibration data
+    nsamples_discard = 0
     await d.set_dmfd_routing(d.ROUTING.CARRIER, module_index) 
-    samples_cal = await d.get_samples(21, module = module_index)
+    samples_cal = await d.py_get_samples(20 + nsamples_discard, module = module_index)
     zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-    zcal = np.mean(zcal[:len(fres), 1:], axis = 1)
+    zcal = np.mean(zcal[:len(fres), nsamples_discard:], axis = 1)
     await d.set_dmfd_routing(d.ROUTING.ADC, module_index)
     np.save(f'tmp/zcal_{module_index}.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
     d.noise_zcal_dict[module_index] = zcal 

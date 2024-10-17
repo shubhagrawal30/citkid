@@ -17,7 +17,6 @@ from hidfmux.core.utils.transferfunctions import apply_cic2_comp_psd
 # Need to update docstrings, imports 
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature,
-           resonator_indices = None,
            extra_fitdata_values = {}, plotq = False, plot_factor = 1,
            overwrite = False, verbose = True, catch_exceptions = False):
     """
@@ -36,7 +35,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         cryostat should be taken into account here
     temperature_index (int): temperature index for logging
     temperature (float): temperature in K for logging
-    resonator_indices (np.array or None): If np.array, list of resonator
+    res_indices (np.array or None): If np.array, list of resonator
         indices corresponding to each resonator in the target sweep. If
         None, resonator indices are assigned by their index into fres
     extra_fitdata_values (dict): keys (str) are data column names and values
@@ -57,7 +56,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     directory = fix_path(directory)
     # Import data
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
-           fgains, zgains, ffines, zfines, znoises, noise_dt =\
+           fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
     import_iq_noise(directory, file_suffix, import_noiseq = False)
     # Set up output files
     if file_suffix != '':
@@ -77,10 +76,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     qres_all = np.array(qres_all, dtype = float) * 1.5
     # Assign resonator indices if they are not given
     data = pd.DataFrame([])
-    if resonator_indices is None:
-        resonator_indices = list(range(len(fres)))
     # Iterate through resonators and fit
-    pbar = resonator_indices
+    pbar = res_indices
     if verbose:
         pbar = tqdm(pbar, leave = False)
         pbar.set_description('Fitting IQ Loops')
