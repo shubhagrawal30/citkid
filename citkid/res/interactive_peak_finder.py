@@ -171,6 +171,132 @@ class peakFinder:
 ########################### Single resonance classes ###########################
 ################################################################################
 
+class poptFinderSingle:
+    def __init__(self, power, anl, sfactor, res, anl_threshold = 0.65, res_threshold = 2e-3):
+        """
+        interactive optimal power finder
+
+        Parameters:
+        power (array-like): array of powers to optimize 
+        anl (array-like): array of nonlinearity parameters 
+        sfactor (array-like): array of ratios of parallel to perpendicular noise 
+        res (array-like): array of IQ fit residuals 
+        anl_threshold (float): highest value of anl to allow for optimization, unless all the 
+            IQ fits were bad 
+        res_threshold (float): IQ fits are considered 'bad' and disregarded for res > res_threshold
+        """
+        power, anl, sfactor, res = np.asarray(power), np.asarray(anl), np.asarray(sfactor), np.asarray(res)
+        ix = np.argsort(power) 
+        self.p0, self.a0, self.s0, self.r0 = power[ix], anl[ix], sfactor[ix], res[ix]
+        self.anl_threshold = anl_threshold 
+        self.res_threshold = res_threshold
+
+        self.setup_plot()
+        self.ax_s.plot([],[],'sk', 
+                        label = 'click: choose optimal power')
+        self.ax_s.plot([],[],'sk', label = 'a/enter: save')
+        self.ax_s.legend(fontsize = 5, ncols = 2, loc = 'lower right')
+        self.initialize_popt()
+        self.initialize_plot()
+        plt.show()
+
+    def setup_plot(self):
+        """
+        Sets up the plot
+        """
+        self.fig, [self.ax_s, self.ax_a] = plt.subplots(2, 1, figsize = [6, 5], dpi = 300,
+                                                        layout = 'tight', sharex = True)
+        self.initialize_plot_axes()
+        self.cid = self.fig.canvas.mpl_connect('button_press_event', 
+                                               self._on_click)
+        self.fig.canvas.mpl_connect('key_press_event', self._on_key_press)
+        self.fig.canvas.mpl_connect('key_release_event', self._on_key_release)
+        # Enable interactive navigation toolbar
+        self.toolbar = plt.rcParams['toolbar']
+        if self.toolbar not in {'None', 'toolbar2', 'toolmanager'}:
+            self.toolbar = plt.rcParams['toolbar'] = 'toolbar2'
+
+    def initialize_plot_axes(self):
+        """
+        Initializes the plot axis labels
+        """
+        self.ax_s.set(ylabel = r'$S_{\mathrm{par}} / S_{\mathrm{per}}$')
+        self.ax_a.set(ylabel = r'$a_{\mathrm{nl}}$', xlabel = 'ouput power (dBm)')
+        self.ax_s.grid() 
+        self.ax_a.grid()
+
+    def initialize_popt(self):
+        ix = self.r0 < self.res_threshold
+        self.p1, self.a1, self.s1 = self.p0[ix], self.a0[ix], self.s0[ix]
+        ix = np.argmax(self.s1)
+        self.p2, self.a2, self.s2 = self.p0[ix], self.a1[ix], self.s1[ix]
+        if len(self.p1):
+            ix = np.where(self.a1 > self.anl_threshold)[0] 
+            if len(ix):
+                ix = ix[0]
+                self.p2, self.a2, self.s2 = self.p1[ix], self.a1[ix], self.s1[ix]
+
+    def initialize_plot(self):
+        """
+        Initializes the plot with the resonance data and resonances
+        """
+        self.ax_s.plot(self.p0, self.s0, 's', color = plt.cm.viridis(0.), label = 'raw data')
+        self.ax_a.plot(self.p0, self.a0, 's', color = plt.cm.viridis(0.), label = 'raw data')
+        self.ax_a.plot(self.p1, self.a1, 's', color = plt.cm.viridis(0.5), label = 'good fits')
+        self.popt_point_s, = self.ax_s.plot(self.p2, self.s2, 's', color = plt.cm.viridis(1.), label = 'opt power')
+        self.popt_point_a, = self.ax_a.plot(self.p2, self.a2, 's', color = plt.cm.viridis(1.), label = 'opt power')
+        # self.ax_s.legend()
+        self.fig.canvas.draw()
+
+    def _on_click(self, event):
+        """
+        If shift is held and the right mouse button is clicked, places a new 
+        resonance frequency where clicked
+        """
+        if event.button == 1:
+            clicked_x, clicked_y = event.xdata, event.ydata
+            ix = np.argmin(abs(clicked_x - self.p0))
+            self.p2, self.a2 = np.asarray([self.p0[ix]]), np.asarray([self.a0[ix]])
+            self.s2 = np.asarray([self.s0[ix]])
+        self._update_plot()
+
+    def _on_key_press(self, event):
+        """
+        Marks if shift or control are pressed. Deletes all resonance frequencies 
+        if 'x' is pressed
+        """
+        if event.key in ['a', 'enter']:
+            self._on_done(None)
+        elif event.key == ' ':
+            self._go_back()
+
+    def _on_key_release(self, event):
+        """
+        Marks if shift or control are released
+        """
+        pass
+
+    def _update_plot(self):
+        """Updates the plot after changing fres"""
+        
+        self.popt_point_s.set_data(self.p2, self.s2)
+        self.popt_point_a.set_data(self.p2, self.a2)
+        self.fig.canvas.draw()
+
+    def _go_back(self):
+        """
+        Does nothing for single resonance
+        """
+        pass
+
+    def _on_done(self, event):
+        """
+        Disconnect and close the plot, save data
+        """
+        self.popt = float(self.p2[0])
+        self.fig.canvas.mpl_disconnect(self.cid)  # Disconnect event handler
+        plt.close(self.fig)  # Close the plot
+
 class qresFinderSingle:
     def __init__(self, x_data, y_data, fres, span0, other_fres, fres_outpath, 
                  span_outpath):
@@ -435,6 +561,95 @@ class qresFinderSingle:
 ################################################################################
 ####################### Single resonance looped classes ########################
 ################################################################################
+class poptFinder(poptFinderSingle):
+    def __init__(self, outpath, powers, anls, sfactors, ress, res_indices, 
+                 anl_threshold = 0.65, res_threshold = 2e-3):
+        """
+        interactive optimal power finder
+
+        Parameters:
+        outpath (str): path to save the output file. Must end in .npy
+
+        Parameters: list of the following parameters
+        powers (array-like): array of powers to optimize 
+        anls (array-like): array of nonlinearity parameters 
+        sfactors (array-like): array of ratios of parallel to perpendicular noise 
+        ress (array-like): array of IQ fit residuals 
+        anl_threshold (float): highest value of anl to allow for optimization, unless all the 
+            IQ fits were bad 
+        res_threshold (float): IQ fits are considered 'bad' and disregarded for res > res_threshold
+        """
+        self.data_index = 0
+
+        self.anl_threshold = anl_threshold 
+        self.res_threshold = res_threshold
+        self.res_indices = np.asarray(res_indices) 
+        self.powers = powers 
+        self.anls = anls 
+        self.sfactors = sfactors 
+        self.ress = ress 
+        self.powers_new = np.asarray([p[0] for p in self.powers])
+        self.powers_new[self.res_indices >=0] = np.nan 
+        self.outpath = outpath
+
+        self.setup_plot()
+        self.ax_s.plot([],[],'sk', 
+                        label = 'click: choose optimal power')
+        self.ax_s.plot([],[],'sk', label = 'a/enter: save')
+        self.ax_s.legend(fontsize = 5, ncols = 2, loc = 'lower right')
+        self.set_data_index()
+        self.initialize_popt()
+        self.initialize_plot()
+        plt.show()
+
+    def set_data_index(self):
+        """Sets all of the variables for the current data index
+           and updates the plot
+        """
+        di = self.data_index 
+        while self.res_indices[di] < 0:
+            di += 1 
+            self.data_index = di
+        power, anl, sfactor, res = self.powers[di], self.anls[di], self.sfactors[di], self.ress[di]
+        power, anl, sfactor, res = np.asarray(power), np.asarray(anl), np.asarray(sfactor), np.asarray(res)
+        ix = np.argsort(power) 
+        self.p0, self.a0, self.s0, self.r0 = power[ix], anl[ix], sfactor[ix], res[ix]
+
+        self.ax_s.set_title(f'Resonator: {int(self.res_indices[di])}')
+        
+        self.ax_a.cla()
+        self.ax_s.cla()
+        self.initialize_plot_axes()
+        self.initialize_popt()
+        self.initialize_plot()
+
+    def _go_back(self):
+        """
+        Goes back to the previous data index
+        """
+        self.powers_new[self.data_index] = np.nan
+        np.save(self.outpath, self.powers_new)
+        if self.data_index != 0:
+            self.data_index -= 1
+            while self.res_indices[self.data_index] < 0:
+                self.data_index -= 1 
+            self.set_data_index()
+        
+    def _on_done(self, event):
+        """
+        Saves the data and moves on to the next plot. Disconnects when
+           finished with all the resonators
+        """
+        self.powers_new[self.data_index] = self.p2
+        np.save(self.outpath, self.powers_new)
+        if self.data_index == len(self.powers) - 1:
+            self.fig.canvas.mpl_disconnect(self.cid)
+            plt.close(self.fig)
+        else:
+            self.data_index += 1
+            self.set_data_index()
+        
+
 class qresFinder(qresFinderSingle):
     def __init__(self, x_datas, y_datas, fress, span0s, 
                  fres_outpaths, span_outpaths):
@@ -537,3 +752,5 @@ class qresFinder(qresFinderSingle):
         else:
             self.resonator_index += 1
             self.set_resonator_index()
+
+

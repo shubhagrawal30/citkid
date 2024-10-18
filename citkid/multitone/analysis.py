@@ -13,10 +13,12 @@ from ..noise.data_io import save_psd
 from .data_io import import_iq_noise
 from .fres import cut_fine_scan
 from hidfmux.core.utils.transferfunctions import apply_cic2_comp_psd
+import matplotlib 
+matplotlib.use('Agg')
 
 # Need to update docstrings, imports 
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
-           constant_atten, temperature_index, temperature,
+           constant_atten, temperature_index, temperature, rejected_points = [],
            extra_fitdata_values = {}, plotq = False, plot_factor = 1,
            overwrite = False, verbose = True, catch_exceptions = False):
     """
@@ -35,6 +37,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         cryostat should be taken into account here
     temperature_index (int): temperature index for logging
     temperature (float): temperature in K for logging
+    rejected_points (array-like): indices to discard from fine scan data before
+        fitting 
     res_indices (np.array or None): If np.array, list of resonator
         indices corresponding to each resonator in the target sweep. If
         None, resonator indices are assigned by their index into fres
@@ -58,6 +62,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
     import_iq_noise(directory, file_suffix, import_noiseq = False)
+    rejected_points = np.asarray(rejected_points)
     # Set up output files
     if file_suffix != '':
         file_suffix = '_' + file_suffix
@@ -85,6 +90,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         plotq_single = ((pbar_index % plot_factor) == 0) and plotq
         ffine, zfine = ffines[pbar_index], zfines[pbar_index]
         fgain, zgain = fgains[pbar_index], zgains[pbar_index]
+        ffine, zfine = np.delete(ffine, rejected_points), np.delete(zfine, rejected_points)
         fr, Qr = fres[pbar_index], qres[pbar_index]
         # Cut adjacent resonators from data before fitting
         if pbar_index not in fcal_indices:
@@ -117,6 +123,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
                 fitrow['fcal'] = 1
             if not fig is None:
                 save_fig(fig, file_prefix + '_fit', fit_plot_directory)
+                fig.clear()
                 plt.close(fig)
         except Exception as e:
             if not catch_exceptions:
@@ -200,7 +207,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     # Import data
     directory = data.iloc[0].dataDirectory
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
-           fgains, zgains, ffines, zfines, znoises, noise_dt =\
+           fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
     import_iq_noise(directory, file_suffix0, import_noiseq = False)
     inoise, qnoise = np.load(directory + f'noise{file_suffix}_{noise_index:02d}.npy')
     dt = float(np.load(directory + f'noise{file_suffix}_tsample_{noise_index:02d}.npy'))

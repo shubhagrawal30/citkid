@@ -87,7 +87,9 @@ def combine_figures_vertically(fig1, fig2):
         ax.set_axis_off()
     axs[0].imshow(plt.imread(buf1))
     axs[1].imshow(plt.imread(buf2))
-    fig.tight_layout()
+    fig.tight_layout() 
+    buf1.close()
+    buf2.close()
     return fig
 
 def combine_figures_horizontally(fig1, fig2):
