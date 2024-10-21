@@ -188,7 +188,7 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, ou
 # Haven't started adapting this one yet
 async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res_indices,
                         dbm_max = -50, a_target = 0.5, n_iterations = 10, n_addonly = 3,
-                        fres_update_method = 'distance',
+                        fres_update_method = 'distance', skip_first = False, start_index = 0,
                         npoints_gain = 50, npoints_fine = 400, plot_directory = None,
                         verbose = False, nsamps = 10, dbm_change_pscale = 2,
                         dbm_change_addonly = 1, addonly_threshold = 0.2):
@@ -210,6 +210,9 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
         update_ares_addonly. Iterations before these use update_ares_pscale
     fine_bw (float): fine sweep bandwidth in MHz. See take_iq_noise
     fres_update_method (str): method for updating frequencies. See update_fres
+    skip_first (bool): If True, skips taking data on the first iteration, and 
+        instead starts from fitting (assumes the data already exists) 
+    start_index (int): file index to start from. 
     npoints_gain (int): number of points in the gain sweep
     npoints_fine (int): number of points in the fine sweep
     plot_directory (str or None): path to save histograms as the optimization is
@@ -222,7 +225,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
     if plot_directory is not None:
         os.makedirs(plot_directory, exist_ok = True)
     fres, ares, qres = np.array(fres), np.array(ares), np.array(qres)
-    pbar0 = list(range(n_iterations))
+    pbar0 = list(range(start_index, n_iterations))
     if verbose:
         pbar0 = tqdm(pbar0, leave = False)
     fit_idx = [i for i in range(len(fres)) if i not in fcal_indices]
@@ -231,17 +234,19 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
         if verbose:
             pbar0.set_description('sweeping')
         file_suffix = f'{idx0:02d}'
-        await take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
-                            take_noise = False, take_rough_sweep = False, npoints_gain = npoints_gain,
-                            npoints_fine = npoints_fine, nsamps = nsamps)
+        if not skip_first or idx0 != start_index:
+            await take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
+                                take_noise = False, take_rough_sweep = False, npoints_gain = npoints_gain,
+                                npoints_fine = npoints_fine, nsamps = nsamps)
 
         # Fit IQ loops
         if verbose:
             pbar0.set_description('fitting')
-        data = fit_iq(out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False, catch_exceptions = True) # Turn off catch_exceptions
-        a_nl = np.array(data.sort_values('resonatorIndex').iq_a, dtype = float)
+        data = fit_iq(out_directory, None, file_suffix, 0, 0, 0, 0, 0, rejected_points = [],
+                      plotq = False, verbose = False, catch_exceptions = True) # Turn off catch_exceptions
+        a_nl = np.array(data.sort_values('dataIndex').iq_a, dtype = float)
         if len(a_nls):
-            a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan]
+            a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan] # Not sure what this does, ask elijah?
         else:
             a_nl[a_nl == np.nan] = 2
         a_nls.append(a_nl)
@@ -309,7 +314,7 @@ def make_cal_tones(fres, ares, qres, max_n_tones = 1000,
         res_indices = np.asarray(range(len(fres)))
     new_res_indices = np.asarray(res_indices, dtype = int)
 
-    ix = np.flip(np.argsort(np.diff(fres)))[:max_n_tones - len(fres)]
+    ix = np.flip(np.argsort(np.diff(fres) / fres[:1]))[:max_n_tones - len(fres)]
     fcal = np.sort([np.mean(fres[i:i+2]) for i in ix])
     fcal_indices = np.searchsorted(fres, fcal)
     fcal_indices += np.asarray(range(len(fcal_indices)), dtype = int)

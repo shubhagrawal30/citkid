@@ -62,7 +62,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
     import_iq_noise(directory, file_suffix, import_noiseq = False)
-    rejected_points = np.asarray(rejected_points)
+    rejected_points = list(rejected_points)
     # Set up output files
     if file_suffix != '':
         file_suffix = '_' + file_suffix
