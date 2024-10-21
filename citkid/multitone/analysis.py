@@ -12,7 +12,7 @@ from ..noise.analysis import compute_psd
 from ..noise.data_io import save_psd
 from .data_io import import_iq_noise
 from .fres import cut_fine_scan
-from hidfmux.core.utils.transferfunctions import apply_cic2_comp_psd
+# from hidfmux.core.utils.transferfunctions import apply_cic2_comp_psd
 import matplotlib 
 matplotlib.use('Agg')
 
@@ -90,7 +90,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         plotq_single = ((pbar_index % plot_factor) == 0) and plotq
         ffine, zfine = ffines[pbar_index], zfines[pbar_index]
         fgain, zgain = fgains[pbar_index], zgains[pbar_index]
-        ffine, zfine = np.delete(ffine, rejected_points), np.delete(zfine, rejected_points)
+        if len(rejected_points):
+            ffine, zfine = np.delete(ffine, rejected_points), np.delete(zfine, rejected_points)
         fr, Qr = fres[pbar_index], qres[pbar_index]
         # Cut adjacent resonators from data before fitting
         if pbar_index not in fcal_indices:
@@ -212,21 +213,21 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     inoise, qnoise = np.load(directory + f'noise{file_suffix}_{noise_index:02d}.npy')
     dt = float(np.load(directory + f'noise{file_suffix}_tsample_{noise_index:02d}.npy'))
 
-    pbar = list(range(len(ffines)))
+    pbar = res_indices
     if verbose:
         pbar = tqdm(pbar, leave = False)
         pbar.set_description('noise index')
     data_new = pd.DataFrame([])
-    for index in pbar:
-        plot_calq_single = ((index % plot_factor) == 0) and plot_calq
-        plot_psdq_single = ((index % plot_factor) == 0) and plot_psdq
-        plot_timestreamq_single = ((index % plot_factor) == 0) and plot_timestreamq
-        prefix = f'Fn{index:02d}_NI{noise_index}{file_suffix}'
-        iq_fit_row = data[data.dataIndex == index].iloc[0]
-        ffine, zfine = ffines[index], zfines[index]
+    for data_index, res_index in enumerate(pbar):
+        plot_calq_single = ((data_index % plot_factor) == 0) and plot_calq
+        plot_psdq_single = ((data_index % plot_factor) == 0) and plot_psdq
+        plot_timestreamq_single = ((data_index % plot_factor) == 0) and plot_timestreamq
+        prefix = f'Fn{res_index:02d}_NI{noise_index}{file_suffix}'
+        iq_fit_row = data[data.dataIndex == data_index].iloc[0]
+        ffine, zfine = ffines[data_index], zfines[data_index]
 
-        i, q = inoise[index], qnoise[index]
-        fnoise = fres[index]
+        i, q = inoise[data_index], qnoise[data_index]
+        fnoise = fres[data_index]
         znoise = i + 1j * q
         znoise = znoise[int(tstart / dt):]
 
@@ -236,7 +237,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         zfine = remove_gain(ffine, zfine, p_amp, p_phase)
         znoise = remove_gain(fnoise, znoise, p_amp, p_phase)
         try:
-            if index in fcal_indices:
+            if data_index in fcal_indices:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
                     cr_indices, theta_range, poly, xcal_data, figs =\
                 compute_psd(ffine, zfine, None, None, None,
