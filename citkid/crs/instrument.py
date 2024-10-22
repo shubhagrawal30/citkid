@@ -518,7 +518,7 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, nsamps = 10,
                     f = frequencies[ch, sweep_index]
                     ctx.set_frequency(f - nco_freq, d.UNITS.HZ, ch + 1, module = module_index)
                 await ctx()
-            nsamples_discard = 10
+            nsamples_discard = 12
             # take data and loopback calibration data
             await d.set_dmfd_routing(d.ROUTING.CARRIER, module_index)
             samples_cal = await d.py_get_samples(20 + nsamples_discard, module = module_index )
@@ -553,7 +553,7 @@ async def get_noise_cal(module, fres_dict):
     module_index = module.module 
     fres = np.asarray(fres_dict[module_index])
     # Get calibration data
-    nsamples_discard = 10
+    nsamples_discard = 12
     await d.set_dmfd_routing(d.ROUTING.CARRIER, module_index) 
     samples_cal = await d.py_get_samples(20 + nsamples_discard, module = module_index)
     zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 

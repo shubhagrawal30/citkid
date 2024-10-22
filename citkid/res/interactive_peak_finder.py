@@ -299,7 +299,8 @@ class poptFinderSingle:
 
 class qresFinderSingle:
     def __init__(self, x_data, y_data, fres, span0, other_fres, fres_outpath, 
-                 span_outpath):
+                 span_outpath, x_data_previous = None, y_data_previous = None,
+                 fres_previous = None):
         """
         Interactive quality factor finder for a single resonance target sweep.
         Use this to confirm and adjust ranges for fitting fine scan data.
@@ -317,7 +318,11 @@ class qresFinderSingle:
         """
         self.x_data = np.asarray(x_data)
         self.y_data = np.asarray(y_data)
-        self.dB_data = 20 * np.log10(self.y_data)
+        self.x_data_previous = np.asarray(x_data_previous) if x_data_previous is not None else None
+        self.y_data_previous = np.asarray(y_data_previous) if y_data_previous is not None else None
+        self.fres_previous = float(fres_previous) if fres_previous is not None else None 
+        self.dB_data = 20 * np.log10(np.abs(self.y_data))
+        self.dB_data_previous = 20 * np.log10(np.abs(self.y_data_previous))
         self.fres_outpath = fres_outpath
         self.span_outpath = span_outpath
         self.fres = float(fres)
@@ -336,14 +341,19 @@ class qresFinderSingle:
         self.iq_scatter = None
         self.control_is_held = False
         self.shift_is_held = False
+        self.span_vline = None
+        self.fres_point = []
 
         self.setup_plot()
-        self.ax_iq.plot([],[],'sk', 
-                        label = 'shift + right click: place resonance')
-        self.ax_iq.plot([],[],'sk', 
-                        label = 'control + right click: change span')
-        self.ax_iq.plot([],[],'sk', label = 'a/enter: save resonance')
-        self.ax_iq.legend(fontsize = 5, ncols = 2, loc = 'lower right')
+        ax = self.ax_iq_p if self.x_data_previous is not None else self.ax_iq
+        # Add annotations of commands
+        annotation_text = (
+            "shift + right click:\nplace resonance\n\n"
+            "control + right click:\nchange span\n\n"
+            "a/enter:\nsave resonance")
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.text(1.05, 0.8, annotation_text, transform=ax.transAxes, fontsize=5,
+                verticalalignment='top', bbox=props)
         self.initialize_plot()
         plt.show()
 
@@ -351,8 +361,13 @@ class qresFinderSingle:
         """
         Sets up the plot
         """
-        self.fig, [self.ax, self.ax_iq] = plt.subplots(1, 2, figsize = [6, 4], 
-                                                       dpi = 300)
+        if self.x_data_previous is None:
+            self.fig, [self.ax, self.ax_iq] = plt.subplots(1, 2, figsize = [6, 3], 
+                                                        dpi = 300, layout = 'tight')
+        else:
+            self.fig, [[self.ax_p, self.ax_iq_p], [self.ax, self.ax_iq]] =\
+                 plt.subplots(2, 2, figsize = [6, 8], dpi = 300, layout = 'tight')
+            self.ax_p.sharex(self.ax)
         self.initialize_plot_axes()
         self.done_button_ax = self.fig.add_axes([0.85, 0.9, 0.1, 0.05])
         self.done_button = plt.Button(self.done_button_ax, 'Done')
@@ -371,12 +386,20 @@ class qresFinderSingle:
         Initializes the plot axis labels
         """
         lbl = int(round(self.fres / 1e3, 0))
+        if self.x_data_previous is not None:
+            axs_iq = [self.ax_iq, self.ax_iq_p]
+            axs = [self.ax, self.ax_p]
+        else:
+            axs_iq = [self.ax_iq] 
+            axs = [self.ax]
+        for ax in axs:
+            ax.set_ylabel(r'$|S_{21}|$ (dB)')
+            ax.grid()
+        for ax in axs_iq:
+            ax.set_xlabel('I')
+            ax.set_ylabel('Q')
+            ax.grid() 
         self.ax.set_xlabel(f'f - {lbl:,} (kHz)')
-        self.ax.set_ylabel(r'$|S_{21}|$ (dB)')
-        self.ax.grid()
-        self.ax_iq.set_xlabel('I')
-        self.ax_iq.set_ylabel('Q')
-        self.ax_iq.grid()
         
 
     def initialize_plot(self):
@@ -411,15 +434,19 @@ class qresFinderSingle:
 
         for xi in self.other_fres:
             self.other_vlines.append(self.ax.axvline(xi / 1e3 - self.x0, 
-                                    color = 'k', linestyle = '--', alpha = 0.3))
-        self.fres_vline = self.ax.axvline(self.fres / 1e3 - self.x0, color='red',
+                                    color = plt.cm.viridis(1.), linestyle = '--', alpha = 0.3))
+        self.fres_vline = self.ax.axvline(self.fres / 1e3 - self.x0, color='k',
                                            linestyle = '--',
                                            alpha = 0.8)
         if self.line is not None:
-            self.line.remove()
+            self.line.remove() 
         self.line, = self.ax.plot(self.x_data / 1e3 - self.x0,
-                                  20 * np.log10(abs(self.y_data)),
-                                  color='blue', linewidth=1)
+                                  20 * np.log10(np.abs(self.y_data)),
+                                  color=plt.cm.viridis(0.), linewidth=1)
+        if self.x_data_previous is not None:
+            self.line_p, = self.ax_p.plot(self.x_data_previous / 1e3 - self.x0,
+                                  20 * np.log10(np.abs(self.y_data_previous)),
+                                  color=plt.cm.viridis(0.), linewidth=1)
         # Set axis limits
         xd = (max(self.x_data) - min(self.x_data)) / 10 * 1e-3
         self.ax.set_xlim(min(self.x_data) / 1e3 - xd - self.x0, 
@@ -437,22 +464,29 @@ class qresFinderSingle:
 
         self.span_fill = self.ax.fill_between([self.fmin / 1e3 - self.x0, 
                                                self.fmax / 1e3 - self.x0],
-                            self.ymin, self.ymax, color = 'green', alpha = 0.3)
+                            self.ymin, self.ymax, color = plt.cm.viridis(0.67), alpha = 0.3)
         self.span_vline = None
 
         self.ydata_ix = (self.x_data <= self.fmax) & (self.x_data >= self.fmin)
 
         self.iq_scatter = self.ax_iq.plot(np.real(self.y_data), 
-                                          np.imag(self.y_data), 'ob')
+                                          np.imag(self.y_data), 'o', color = plt.cm.viridis(0.))
+        if self.x_data_previous is not None:
+            self.iq_scatter_p = self.ax_iq_p.plot(np.real(self.y_data_previous), 
+                                            np.imag(self.y_data_previous), 'o', color = plt.cm.viridis(0.))
         self.iq_cut = self.ax_iq.plot(np.real(self.y_data[self.ydata_ix]),
-                                      np.imag(self.y_data[self.ydata_ix]), 'og',
+                                      np.imag(self.y_data[self.ydata_ix]), 'o', color = plt.cm.viridis(0.67),
                                        alpha = 1)
         ix = np.argmin(abs(self.fres - self.x_data))
         self.fres_point = self.ax_iq.plot(np.real(self.y_data[ix]), 
-                                        np.imag(self.y_data[ix]), color = 'red', 
+                                        np.imag(self.y_data[ix]), color = 'black', 
                                         marker = 'x', markersize = 5)
+        if self.x_data_previous is not None:
+            ix = np.argmin(abs(self.fres_previous - self.x_data_previous))
+            self.fres_point_p = self.ax_iq_p.plot(np.real(self.y_data_previous[ix]), 
+                                            np.imag(self.y_data_previous[ix]), color = 'black', 
+                                            marker = 'x', markersize = 5)
         self.fig.canvas.draw()
-        plt.tight_layout()
 
     def _on_click(self, event):
         """
@@ -506,7 +540,7 @@ class qresFinderSingle:
     def _update_plot(self):
         """Updates the plot after changing fres"""
         self.fres_vline.remove()
-        self.fres_vline = self.ax.axvline(self.fres / 1e3 - self.x0, color='red',
+        self.fres_vline = self.ax.axvline(self.fres / 1e3 - self.x0, color='black',
                                            linestyle = '--',
                                            alpha = 1)
 
@@ -521,16 +555,16 @@ class qresFinderSingle:
             self.span_vline = None
         if self.fmax is None:
             self.span_vline = self.ax.axvline(self.fmin / 1e3 - self.x0, 
-                                color = 'green', linestyle = '--', alpha = 0.3)
+                                color = plt.cm.viridis(0.67), linestyle = '--', alpha = 0.3)
         else:
             self.ydata_ix = (self.x_data <= self.fmax) & (self.x_data >= self.fmin)
             self.span_fill = self.ax.fill_between([self.fmin / 1e3 - self.x0, 
                                                    self.fmax / 1e3 - self.x0],
                                                    self.ymin, self.ymax, 
-                                                   color = 'green', alpha = 0.3)
+                                                   color = plt.cm.viridis(0.67), alpha = 0.3)
             self.iq_cut = self.ax_iq.plot(np.real(self.y_data[self.ydata_ix]),
                                           np.imag(self.y_data[self.ydata_ix]), 
-                                          'og', alpha = 0.8)
+                                          'o', color = plt.cm.viridis(0.67), alpha = 0.8)
         for p in self.fres_point:
             p.remove()
             print(p)
@@ -539,7 +573,7 @@ class qresFinderSingle:
             x, y = np.real(self.y_data[ix]), np.imag(self.y_data[ix])
         else:
             x, y = [], []
-        self.fres_point = self.ax_iq.plot(x, y, color = 'red', marker = 'x', 
+        self.fres_point = self.ax_iq.plot(x, y, color = 'black', marker = 'x', 
                                           markersize = 5)
         self.fig.canvas.draw()
 
@@ -652,7 +686,8 @@ class poptFinder(poptFinderSingle):
 
 class qresFinder(qresFinderSingle):
     def __init__(self, x_datas, y_datas, fress, span0s, 
-                 fres_outpaths, span_outpaths):
+                 fres_outpaths, span_outpaths, res_indices, titles = None, titles_previous = None,
+                 x_datas_previous = None, y_datas_previous = None, fress_previous = None):
         """
         Interactive qres finder to loop over single resonance target sweeps.
         Use this to confirm and adjust ranges for fitting fine scan data.
@@ -682,6 +717,12 @@ class qresFinder(qresFinderSingle):
         self.other_fress = np.array([np.delete(fress, i) for i in range(len(fress))])
         self.fres_outpaths = fres_outpaths
         self.span_outpaths = span_outpaths
+        self.x_datas_previous = x_datas_previous 
+        self.y_datas_previous = y_datas_previous 
+        self.fress_previous = fress_previous 
+        self.res_indices = res_indices
+        self.titles = titles 
+        self.titles_previous = titles_previous
 
         self.other_vlines = []
         self.vlines = []
@@ -692,14 +733,8 @@ class qresFinder(qresFinderSingle):
         self.fres_point = []
         self.iq_scatter = None
 
+        self.x_data_previous = self.x_datas_previous[0] if self.x_datas_previous is not None else None
         self.setup_plot()
-        self.ax_iq.plot([],[],'sk', 
-                        label = 'shift + right click: place resonance')
-        self.ax_iq.plot([],[],'sk', 
-                        label = 'control + right click: change span')
-        self.ax_iq.plot([],[],'sk', label = 'a/enter: save resonance')
-        self.ax_iq.plot([],[],'sk', label = 'space: go back')
-        self.ax_iq.legend(fontsize = 5, ncols = 2, loc = 'lower right')
         self.set_resonator_index()
         plt.show()
 
@@ -711,13 +746,20 @@ class qresFinder(qresFinderSingle):
         self.ax.set_title(f'Resonator: {int(ri)}')
         self.x_data = np.array(self.x_datas[ri])
         self.y_data = np.array(self.y_datas[ri])
-        self.dB_data = 20 * np.log10(abs(self.y_data))
+        self.dB_data = 20 * np.log10(np.abs(self.y_data))
         self.fres_outpath = self.fres_outpaths[ri]
         self.span_outpath = self.span_outpaths[ri]
         self.fres = float(self.fress[ri])
         self.span0 = self.span0s[ri]
         self.fmin = self.fres - self.span0 / 2
         self.fmax = self.fres + self.span0 / 2
+        self.res_index = self.res_indices[ri]
+
+        if self.x_datas_previous is not None:
+            self.x_data_previous = np.array(self.x_datas_previous[ri])
+            self.y_data_previous = np.array(self.y_datas_previous[ri])
+            self.dB_data_previous = 20 * np.log10(np.abs(self.y_data_previous)) 
+            self.fres_previous = float(self.fress_previous[ri])
 
         self.other_vlines = []
         self.vlines = []
@@ -728,8 +770,29 @@ class qresFinder(qresFinderSingle):
         self.other_fres = self.other_fres[ix]
         self.ax.cla()
         self.ax_iq.cla()
+        if self.x_datas_previous is not None:
+            self.ax_p.cla() 
+            self.ax_iq_p.cla()
         self.initialize_plot_axes()
         self.initialize_plot()
+
+        self.ax.set_title(f'Fn {self.res_index}')
+        if self.titles is not None:
+            self.ax_iq.set_title(self.titles[ri]) 
+        if self.x_datas_previous is not None and self.titles_previous is not None:
+            self.ax_iq_p.set_title(self.titles_previous[ri])
+
+        # Add annotations of commands
+        ax = self.ax_iq_p if self.x_datas_previous is not None else self.ax_iq
+        annotation_text = (
+            "shift + right click:\nplace resonance\n\n"
+            "control + right click:\nchange span\n\n"
+            "a/enter:\nsave resonance\n\n"
+            "space:\ngo back")
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.text(1.05, 0.8, annotation_text, transform=ax.transAxes, fontsize=5,
+                verticalalignment='top', bbox=props)
+        plt.draw()
 
     def _go_back(self):
         """

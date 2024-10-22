@@ -190,7 +190,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
                         dbm_max = -50, a_target = 0.5, n_iterations = 10, n_addonly = 3,
                         fres_update_method = 'distance', skip_first = False, start_index = 0,
                         npoints_gain = 50, npoints_fine = 400, plot_directory = None,
-                        verbose = False, nsamps = 10, dbm_change_pscale = 2,
+                        verbose = False, nsamps = 10, dbm_change_pscale = 2, fres_all = None, qres_all = None,
                         dbm_change_addonly = 1, addonly_threshold = 0.2):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
@@ -237,6 +237,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
         if not skip_first or idx0 != start_index:
             await take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
                                 take_noise = False, take_rough_sweep = False, npoints_gain = npoints_gain,
+                                fres_all = fres_all, qres_all = qres_all,
                                 npoints_fine = npoints_fine, nsamps = nsamps)
 
         # Fit IQ loops
@@ -256,7 +257,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
             save_fig(fig_hist, 'ares_hist', plot_directory)
             save_fig(fig_opt, 'ares_opt', plot_directory)
         # Update ares
-        if idx0 <= n_addonly:
+        if n_iterations - idx0 > n_addonly:
             ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
                                            a_nl[fit_idx], a_target = a_target,
                                            dbm_max = dbm_max, dbm_change_high = dbm_change_pscale,
