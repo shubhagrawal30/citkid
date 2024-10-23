@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from tqdm.auto import tqdm
 from ..res.fitter import fit_nonlinear_iq_with_gain
+from ..res.funcs import nonlinear_iq
 from ..res.gain import fit_and_remove_gain_phase
 from ..res.data_io import make_fit_row, separate_fit_row
 from ..util import fix_path, save_fig
@@ -291,3 +292,83 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     data_new = data_new.reset_index(drop = True)
     data_new.to_csv(outpath, index = False)
     return data_new
+
+
+
+
+def plot_fits_batch(directory, file_suffix, plot_directory):
+    """
+    
+
+    Parameters:
+    directory (str): directory containing the data to fit 
+    file_suffix (str): file suffix of the data 
+    plot_directory (str): directory to save plots
+    """
+    data = fit_iq(directory, None, file_suffix, 0, 0, 0, 0, 0, rejected_points = [],
+                      plotq = False, verbose = True, catch_exceptions = True) 
+
+    fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
+           fgain, zgain, ffine, zfine, znoises, noise_dt, res_indices0 =\
+    import_iq_noise(directory, file_suffix, import_noiseq = False) 
+
+    fs, zs, popts, ress, res_indices = [], [], [], [], []
+    for index in [d for d in range(len(fres)) if d not in fcal_indices]:
+        row = data[data.dataIndex == index].iloc[0]
+        p_amp, p_phase, p0, popt, perr, res, plot_path = separate_fit_row(row, prefix = 'iq')
+
+        ff, zf = ffine[index], zfine[index]
+        zs.append(remove_gain(ff, zf, p_amp, p_phase)) 
+        fs.append(ff) 
+        popts.append(popt)  
+        ress.append(res)
+        res_indices.append(res_indices0[index])
+        # fres.append(fres[index])
+
+    plot_directory = fix_path(plot_directory)
+    os.makedirs(plot_directory, exist_ok = True)
+
+
+    num_plots = len(fs)
+
+    plots_per_fig = 100
+    max_n_cols = 4
+    num_figs = (num_plots - 1) // plots_per_fig + 1
+
+    for fig_index in range(num_figs):
+        ix0, ix1 = fig_index * plots_per_fig, (fig_index + 1) * plots_per_fig
+        f0, z0 = fs[ix0:ix1], zs[ix0:ix1]
+        rs0 = res_indices[ix0:ix1]
+        popt0, res0 = popts[ix0:ix1], ress[ix0:ix1]
+        res_ix0 = res_indices[ix0:ix1]
+        fres0 = fres[ix0:ix1]
+
+        data_indices = np.arange(ix0, ix1, 1)
+
+        naxs = len(f0) 
+        nrows = naxs // max_n_cols
+        len_last_row = naxs % max_n_cols  
+        if len_last_row > max_n_cols or len_last_row == 0:
+            ncols = max_n_cols 
+        else:
+            ncols = len_last_row
+        fig, axs = plt.subplots(nrows, ncols, figsize = [3 * ncols, 2.5 * nrows], layout = 'tight')
+        axs = axs.flatten()
+        for index, ax in enumerate(axs):
+            ax.set(ylabel = 'Q', xlabel = 'I') 
+
+            f, z = f0[index], z0[index]
+            popt, res = popt0[index], res0[index] 
+            ri = res_ix0[index]
+            fr = fres0[index]
+            ax.set(title = f'Fn {ri}')
+             
+            color = plt.cm.viridis(0.) 
+            
+            ax.plot(np.real(z), np.imag(z), '.', color = color) 
+            fsamp = np.linspace(min(f), max(f), 200) 
+            zsamp = nonlinear_iq(fsamp, *popt) 
+            ax.plot(np.real(zsamp), np.imag(zsamp), '--k')
+
+        save_fig(fig, f'fres_update_{fig_index}', plot_directory, ftype = 'png',
+                            tight_layout = False, close_fig = True)

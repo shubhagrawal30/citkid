@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os 
+from matplotlib.widgets import TextBox
 
 class peakFinder:
     def __init__(self, x_data, y_data, fr_initial, outpath):
@@ -686,7 +688,8 @@ class poptFinder(poptFinderSingle):
 
 class qresFinder(qresFinderSingle):
     def __init__(self, x_datas, y_datas, fress, span0s, 
-                 fres_outpaths, span_outpaths, res_indices, titles = None, titles_previous = None,
+                 fres_outpaths, span_outpaths, res_indices, ares = None, ares_title = '',
+                 titles = None, titles_previous = None,
                  x_datas_previous = None, y_datas_previous = None, fress_previous = None):
         """
         Interactive qres finder to loop over single resonance target sweeps.
@@ -723,6 +726,8 @@ class qresFinder(qresFinderSingle):
         self.res_indices = res_indices
         self.titles = titles 
         self.titles_previous = titles_previous
+        self.ares = ares 
+        self.ares_title = ares_title
 
         self.other_vlines = []
         self.vlines = []
@@ -792,6 +797,16 @@ class qresFinder(qresFinderSingle):
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
         ax.text(1.05, 0.8, annotation_text, transform=ax.transAxes, fontsize=5,
                 verticalalignment='top', bbox=props)
+        
+        # adjustment box 
+        if self.ares is not None:
+            axbox = self.fig.add_axes([0.5, 0.2, 0.1, 0.05])  # Position of the text box (left, bottom, width, height)
+            text_box = TextBox(axbox, '', initial="25", label_pad=0.05)
+            ax_title = self.fig.add_axes([0.5, 0.25, 0.2, 0.05])  # Position for the title
+            ax_title.axis('off')  # Hide the axis
+            ax_title.text(0.5, 0.5, self.ares_title, horizontalalignment='center', verticalalignment='center')
+            # Connect the text box to the submit function
+            # text_box.on_submit(submit)
         plt.draw()
 
     def _go_back(self):
@@ -817,3 +832,64 @@ class qresFinder(qresFinderSingle):
             self.set_resonator_index()
 
 
+def run_qres_opt(out_directory, f, z, fres, qres, ares, fcal_indices, res_indices, bypass_indices,
+                 f_previous, z_previous, fres_previous, ares_previous, delete_temp_data = False):
+    """ 
+    runs qres optimization 
+
+    Parameters:
+    out_directory (str): directory to save the file  
+    fcal_indices (array-like): calibration tone indices 
+    res_indices (array-like): resonator indices 
+    bypass_indices (array-like): resonator indices to bypass 
+    delete_temp_data (bool): if True, deletes temporary data that was created while running
+    The following parameters are lists of lists, where the first index is the resonator index and 
+        the second index is the data 
+    f (M X N array-like, float): frequency data in Hz 
+    z (M X N array-like, complex): complex S21 data in Hz 
+    fres (M X 1 array-like, float): resonance frequencies in Hz 
+    qres (M X 1 array-like, float): q-factors 
+    ares (M X 1 array-like, float): parameter that was varied from the last dataset 
+    parameters with _previous suffix: same as above, but from the previous value of ares 
+    """
+    path = out_directory + 'fres.npy'
+    if os.path.exists(path):
+        response = '' 
+        while response != 'y':
+            response = input(f'{path} already exists!! Overwrite (y/n)?') 
+            if response == 'n':
+                raise FileExistsError(f'{path} already exists!!')
+    os.makedirs(out_directory, exist_ok = True)
+    f, z = np.asarray(f), np.asarray(z) 
+    fres, qres, ares = np.asarray(fres), np.asarray(qres), np.asarray(ares) 
+    fcal_indices, bypass_indices = np.asarray(fcal_indices), np.asarray(bypass_indices) 
+    f_previous, z_previous = np.asarray(f_previous), np.asarray(z_previous) 
+    fres_previous, ares_previous = np.asarray(fres_previous), np.asarray(ares_previous)
+    
+    onres_indices = [i for i in range(len(fres)) if i not in fcal_indices and res_indices[i] not in bypass_indices]
+    fres_outpaths = [out_directory + f'fres_{ri:04d}.npy' for ri in res_indices[onres_indices]]
+    span_outpaths = [out_directory + f'span_{ri:04d}.npy' for ri in res_indices[onres_indices]]
+
+    titles = np.array([f'{round(a, 2)} dB' for a in ares])
+    titles_previous = np.array([f'{round(a, 2)} dB' for a in ares_previous])
+    qresFinder(f[onres_indices], z[onres_indices], fres[onres_indices], 
+               fres[onres_indices] / qres[onres_indices], fres_outpaths, span_outpaths, 
+               x_datas_previous = f_previous[onres_indices], 
+               y_datas_previous = z_previous[onres_indices],
+               res_indices = res_indices[onres_indices],
+               fress_previous = fres_previous[onres_indices],
+               titles_previous = titles_previous[onres_indices], titles = titles[onres_indices],
+               ares = None, ares_title = 'power (dBm)')
+
+    fres = fres.copy()
+    qres = qres.copy() 
+    for fres_path, span_path, index in zip(fres_outpaths, span_outpaths, onres_indices):
+        fres[index] = np.load(fres_path)
+        span = np.load(span_path, allow_pickle = True) 
+        if None not in span:
+            qres[index] = fres[index] / abs(np.diff(span)[0])
+        if delete_temp_data:
+            os.remove(fres_path)
+            os.remove(span_path)
+    np.save(out_directory + 'fres.npy', fres)
+    np.save(out_directory + 'qres.npy', qres)

@@ -189,9 +189,9 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, ou
 async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res_indices,
                         dbm_max = -50, a_target = 0.5, n_iterations = 10, n_addonly = 3,
                         fres_update_method = 'distance', skip_first = False, start_index = 0,
-                        npoints_gain = 50, npoints_fine = 400, plot_directory = None,
+                        npoints_gain = 50, npoints_fine = 400, plot_directory = None, bypass_indices = [],
                         verbose = False, nsamps = 10, dbm_change_pscale = 2, fres_all = None, qres_all = None,
-                        dbm_change_addonly = 1, addonly_threshold = 0.2):
+                        dbm_change_addonly = 1, addonly_threshold = 0.2, res_threshold = 2e-3):
     """
     Optimize tone powers using by iteratively fitting IQ loops and using a_nl
     of each fit to scale each tone power
@@ -217,6 +217,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
     npoints_fine (int): number of points in the fine sweep
     plot_directory (str or None): path to save histograms as the optimization is
         running. If None, doesn't save plots
+    bypass_indices (array-like): resonator indices to bypass optimization
     verbose (bool): if True, displays a progress bar of the iteration number
     N_accums (int): number of accumulations for the target sweeps
     threshold (float): optimization will occur within (1-threshold) and
@@ -225,10 +226,11 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
     if plot_directory is not None:
         os.makedirs(plot_directory, exist_ok = True)
     fres, ares, qres = np.array(fres), np.array(ares), np.array(qres)
+    bypass_indices = np.asarray(bypass_indices)
     pbar0 = list(range(start_index, n_iterations))
     if verbose:
         pbar0 = tqdm(pbar0, leave = False)
-    fit_idx = [i for i in range(len(fres)) if i not in fcal_indices]
+    fit_idx = [i for i in range(len(fres)) if i not in fcal_indices and res_indices[i] not in bypass_indices]
     a_nls = []
     for idx0 in pbar0:
         if verbose:
@@ -244,12 +246,9 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
         if verbose:
             pbar0.set_description('fitting')
         data = fit_iq(out_directory, None, file_suffix, 0, 0, 0, 0, 0, rejected_points = [],
-                      plotq = False, verbose = False, catch_exceptions = True) # Turn off catch_exceptions
+                      plotq = False, verbose = verbose, catch_exceptions = True) # Turn off catch_exceptions
         a_nl = np.array(data.sort_values('dataIndex').iq_a, dtype = float)
-        if len(a_nls):
-            a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan] # Not sure what this does, ask elijah?
-        else:
-            a_nl[a_nl == np.nan] = 2
+        res = np.array(data.sort_values('dataIndex').iq_a, dtype = float)
         a_nls.append(a_nl)
         np.save(out_directory + f'a_nl_{file_suffix}.npy', a_nl)
         if plot_directory is not None:
@@ -257,19 +256,21 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
             save_fig(fig_hist, 'ares_hist', plot_directory)
             save_fig(fig_opt, 'ares_opt', plot_directory)
         # Update ares
+        fit_idx1 = [i for i in fit_idx if res[i] <= res_threshold and np.isfinite(a_nl[i])] # Don't update if bad fit 
         if n_iterations - idx0 > n_addonly:
-            ares[fit_idx] = update_ares_pscale(fres[fit_idx], ares[fit_idx],
-                                           a_nl[fit_idx], a_target = a_target,
+            ares[fit_idx1] = update_ares_pscale(fres[fit_idx1], ares[fit_idx1],
+                                           a_nl[fit_idx1], a_target = a_target,
                                            dbm_max = dbm_max, dbm_change_high = dbm_change_pscale,
                                            dbm_change_low = dbm_change_pscale)
         else:
-            ares[fit_idx] = update_ares_addonly(fres[fit_idx], ares[fit_idx],
-                                                a_nl[fit_idx],
+            ares[fit_idx1] = update_ares_addonly(fres[fit_idx1], ares[fit_idx1],
+                                                a_nl[fit_idx1],
                                                 a_target = a_target,
-                                                dbm_max = dbm_max,
+                                                dbm_max = dbm_max, 
                                                 dbm_change_high = dbm_change_addonly,
                                                 dbm_change_low = dbm_change_addonly,
                                                 threshold = addonly_threshold)
+        
         # update fres
         f, i, q = np.load(out_directory + f's21_fine_{file_suffix}.npy')
         fres = update_fres(f, i + 1j * q, fres, qres,

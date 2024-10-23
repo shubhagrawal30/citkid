@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.ticker as mtick
 from ..util import fix_path, save_fig
-import os 
+import os
+
 
 def plot_ares_opt(a_nls, fcal_indices):
     """
@@ -117,3 +118,6 @@ def plot_update_fres(fs, zs, fres, fcal_indices, res_indices, cable_delay, plot_
             ax1.plot(np.real(z[ix]), np.imag(z[ix]), 'xk', markersize = 20)
         save_fig(fig, f'fres_update_{fig_index}', plot_directory, ftype = 'png',
                             tight_layout = False, close_fig = True)
+        
+
+
