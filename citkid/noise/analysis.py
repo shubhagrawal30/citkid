@@ -139,6 +139,57 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     return psd_onres, psd_offres, timestream_onres, timestream_offres,\
            cr_indices, theta_range, poly, xcal_data, figs
 
+def compute_psd_simple(ffine, zfine, fnoise, znoise, dt, deglitch_nstd = 5):
+    """
+    Computes an approximation ofparallel and perpendicular noise PSDs 
+    by rotating the noise data to 0, 0 and returning PSDs of I, Q
+
+    Parameters:
+    ffine (array-like): fine scan frequency data in Hz
+    zfine (array-like): fine scan complex S21 data, with gain removed
+    fnoise (float): on-resonance noise tone frequency in Hz
+    znoise (array-like or None): on-resonance complex noise data, with gain
+        removed. For off-resonance noise only, set this to None
+    dt (float): sample time of the on-resonance noise timestream in s
+    deglitch_nstd (float or None): threshold for removing glitched data points from
+        the timestream, or None to bypass deglitching. Points more than
+        deglitch_nstd times the standard deviations of the theta timestream are
+        removed from the data.
+
+    Returns:
+    psd (tuple): on-resonance psd data, or None
+        f_psd (np.array): frequency array for PSDs
+        spar  (np.array): PSD of Q noise
+        sper  (np.array): PSD of I noise
+    """
+    # Prepare data
+    ffine, zfine= np.asarray(ffine), np.asarray(zfine)
+    ix = np.argsort(ffine)
+    ffine, zfine = ffine[ix], zfine[ix]
+    # Fit circle
+    popt_circle, _ = fit_iq_circle(zfine, plotq = False)
+    origin = popt_circle[0] + 1j * popt_circle[1]
+    radius = popt_circle[2]
+
+    # deglitch 
+    I, Q = np.real(znoise), np.imag(znoise)
+    ix = np.abs(np.mean(I) - I) > deglitch_nstd * np.std(I)
+    ix = ix | (np.abs(np.mean(Q) - Q) > deglitch_nstd * np.std(Q))
+    znoise[ix] = np.mean(znoise)
+
+    # Center data on origin of circle and rotate to center noise ball 
+    zfine -= origin 
+    znoise -= origin 
+    a = np.angle(np.mean(znoise)) 
+    zfine *= np.exp(-1j * a) 
+    znoise *= np.exp(-1j * a) 
+
+    # Get PSDs
+    spar = get_psd(np.imag(znoise), dt)
+    sper = get_psd(np.real(znoise), dt)
+    f_psd = np.fft.rfftfreq(len(znoise), d = dt)
+    return f_psd, spar, sper
+
 ################################################################################
 ##################### Timestream analysis function #############################
 ################################################################################

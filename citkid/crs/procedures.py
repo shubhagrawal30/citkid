@@ -8,12 +8,16 @@ from ..multitone.plot import plot_ares_opt
 from ..util import save_fig
 import matplotlib.pyplot as plt
 from time import sleep
+from ..res.gain import fit_and_remove_gain_phase, remove_gain
+from ..multitone.data_io import import_iq_noise
+from ..noise.analysis import compute_psd_simple
 
 async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
                   noise_time = 200, take_noise = False, gain_span_factor = 10,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
                   take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
-                  fres_all = None, qres_all = None, verbose = True, cable_delay = 0):
+                  fres_all = None, qres_all = None, verbose = True, cable_delay = 0,
+                  take_fast_noise = False, fast_noise_time = 10, n_fast_noise = 1):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -110,6 +114,14 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
         fsample_noise = inst.sample_frequency
         filename = f'noise{file_suffix}_tsample_00.npy'
         np.save(out_directory + filename, 1 / fsample_noise)
+
+    if take_fast_noise:
+        for data_index in range(len(fres)):
+            frequency, amplitude = fres[data_index], ares[data_index]
+            for noise_index in range(n_fast_noise):
+                filename = 'noise_fast{file_suffix}_DI{data_index:04d}NI{noise_index:02d}.npy'
+                fraw, z = crs.capture_fast_noise(frequency, amplitude, fast_noise_time, verbose = True)
+                np.save(out_directory + filename, [fraw, np.real(z), np.imag(z)])
 
 async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,
                            file_suffix, npoints = 600, nsamps = 10, plot_directory = '',
@@ -225,7 +237,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
     """
     if plot_directory is not None:
         os.makedirs(plot_directory, exist_ok = True)
-    fres, ares, qres = np.array(fres), np.array(ares), np.array(qres)
+    fres, ares, qres = np.asarray(fres), np.asarray(ares), np.asarray(qres)
     bypass_indices = np.asarray(bypass_indices)
     pbar0 = list(range(start_index, n_iterations))
     if verbose:
@@ -278,6 +290,91 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
         # for the last iteration, save the updated ares list
         if idx0 == len(fres) - 1:
             np.save(out_directory + f'ares_{idx0 + 1:02d}', ares)
+
+
+async def optimize_ares_noise(inst, out_directory, fres, ares, qres, fcal_indices, res_indices,
+                              dbm_max = -50, sfact_target = 2, n_iterations = 10, sfact_freq = 30,
+                              fres_update_method = 'distance', skip_first = False, start_index = 0,
+                              npoints_gain = 50, npoints_fine = 400, plot_directory = None, bypass_indices = [],
+                              verbose = False, nsamps = 10, dbm_change = 2, fres_all = None, qres_all = None):
+    """
+    Optimize tone powers by iteratively taking noise data and comparing parallel to perpendicular noise 
+
+    Parameters:
+    inst (citkid.primecam.instrument.RFSOC): RFSOC instance
+    out_directory (str): directory to save data 
+    fres (array-like): array of center frequencies in Hz
+    ares (array-like): array of amplitudes in RFSoC units
+    qres (array-like): array of resonators Qs for cutting data. Resonances should
+        span fres / qres
+    fcal_indices (array-like): calibration tone indices
+    res_indices (array-like): resonator indices 
+    max_dbm (float): maximum power per tone in dBm
+    sfact_target (float): target value to exceed for Spar / Sper 
+    n_iterations (int): total number of iterations
+    sfact_freq (float): frequency at which Spar and Sper are averaged (in a 10% bin) to 
+        determine sfactor = Spar / Sper 
+    skip_first (bool): If True, skips taking data on the first iteration, and 
+        instead starts from fitting (assumes the data already exists) 
+    start_index (int): file index to start from. 
+    npoints_gain (int): number of points in the gain sweep
+    npoints_fine (int): number of points in the fine sweep
+    plot_directory (str or None): plots are not implemented yet 
+    bypass_indices (array-like): resonator indices to bypass optimization
+    verbose (bool): if True, displays a progress bar of the iteration number
+    nsamps (int): number of samples per frequency in the sweeps for averaging
+    dbm_change (float): amount added to each power that is under sfact_target 
+    fres_all (array-like): full list of resonance frequencies for gain sweep fitting
+    qres_all (array-like): full list of resonance q-factors for gain sweep fitting
+    """
+    if plot_directory is not None:
+        os.makedirs(plot_directory, exist_ok = True)
+    fres, ares, qres = np.array(fres), np.array(ares), np.array(qres)
+    bypass_indices = np.asarray(bypass_indices)
+    pbar0 = list(range(start_index, n_iterations))
+    if verbose:
+        pbar0 = tqdm(pbar0, leave = False)
+    fit_idx = [i for i in range(len(fres)) if i not in fcal_indices and res_indices[i] not in bypass_indices]
+    a_nls = []
+    for idx0 in pbar0:
+        if verbose:
+            pbar0.set_description('sweeping')
+        file_suffix = f'{idx0:02d}'
+        if not skip_first or idx0 != start_index:
+            await take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
+                                take_noise = True, noise_time = int(sfact_freq / 5), take_rough_sweep = False, 
+                                npoints_gain = npoints_gain, fres_all = fres_all, qres_all = qres_all,
+                                npoints_fine = npoints_fine, nsamps = nsamps)
+
+        # Calibrate noise 
+        fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
+           fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
+            import_iq_noise(out_directory, file_suffix, import_noiseq = True)
+        sfactors = np.empty(len(fres))
+        for di in range(len(fres)):
+            if di in fcal_indices:
+                sfactors[di] = np.nan
+            else:
+                ff, zf, fg, zg, zn = ffines[di], zfines[di], fgains[di], zgains[di], znoises[di]
+                fn = fres[di]
+                p_amp, p_phase, zf_rmv, _ =\
+                fit_and_remove_gain_phase(fg, zg, ff, zf, frs = fres_all, Qrs = qres_all, plotq=False)
+                zn_rmv = remove_gain(fn, zn, p_amp, p_phase)
+                f_psd, spar, sper = compute_psd_simple(ff, zf_rmv, fn, zn_rmv, noise_dt, deglitch_nstd = 5) 
+                ix = np.abs(f_psd - sfact_freq) < (sfact_freq / 10)
+                sfactors[di] = np.mean(spar[ix]) / np.mean(sper[ix])
+        np.save(out_directory + f'sfact_{idx0:02d}.npy', sfactors)
+        a_increase_idx = [di for di in fit_idx if sfactors[di] < sfact_target] 
+        ares[a_increase_idx] += dbm_change 
+        ares[ares > dbm_max] = dbm_max
+        # update fres
+        f, i, q = np.load(out_directory + f's21_fine_{file_suffix}.npy')
+        fres = update_fres(f, i + 1j * q, fres, qres,
+                           fcal_indices = fcal_indices, method = fres_update_method)
+        # for the last iteration, save the updated ares list
+        if idx0 == len(fres) - 1:
+            np.save(out_directory + f'ares_{idx0 + 1:02d}.npy', ares)
+            np.save(out_directory + f'fres_{idx0 + 1:02d}.npy', fres)
 
 ################################################################################
 ######################### Utility functions ####################################
