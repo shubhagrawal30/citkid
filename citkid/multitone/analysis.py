@@ -14,10 +14,10 @@ from ..noise.data_io import save_psd
 from .data_io import import_iq_noise
 from .fres import cut_fine_scan
 # from hidfmux.core.utils.transferfunctions import apply_cic2_comp_psd
-import matplotlib 
+import matplotlib
 matplotlib.use('Agg')
 
-# Need to update docstrings, imports 
+# Need to update docstrings, imports
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature, rejected_points = [],
            extra_fitdata_values = {}, plotq = False, plot_factor = 1,
@@ -39,7 +39,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     temperature_index (int): temperature index for logging
     temperature (float): temperature in K for logging
     rejected_points (array-like): indices to discard from fine scan data before
-        fitting 
+        fitting
     res_indices (np.array or None): If np.array, list of resonator
         indices corresponding to each resonator in the target sweep. If
         None, resonator indices are assigned by their index into fres
@@ -77,9 +77,9 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         if not overwrite and os.path.exists(out_path):
             raise Exception(f'{out_path} already exists!!!')
     # Split data
-    qres = np.array(qres, dtype = float) * 1.5
+    qres = np.array(qres, dtype = float)
     qres[fcal_indices] = np.inf
-    qres_all = np.array(qres_all, dtype = float) * 1.5
+    qres_all = np.array(qres_all, dtype = float)
     # Assign resonator indices if they are not given
     data = pd.DataFrame([])
     # Iterate through resonators and fit
@@ -96,7 +96,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         fr, Qr = fres[pbar_index], qres[pbar_index]
         # Cut adjacent resonators from data before fitting
         if pbar_index not in fcal_indices:
-            ffine, zfine = cut_fine_scan(ffine, zfine, fres, fres / qres / 1.5)
+            ffine, zfine = cut_fine_scan(ffine, zfine, fres, fres / qres)
 
         file_prefix = f'Tn{temperature_index}Fn{resonator_index}'
         file_prefix += f'Pn{power_number}{file_suffix}'
@@ -144,7 +144,10 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     data['powerNumber'] = power_number
     data['rfsocPower'] = ares
     data['inAtten'] = in_atten
-    data['constantAtten'] = constant_atten
+    if callable(constant_atten):
+        data['constantAtten'] = constant_atten(data.f0)
+    else:
+        data['constantAtten'] = constant_atten
     data['outputPower'] = ares
     data['power'] = data.outputPower - data.inAtten - data.constantAtten
     for key in extra_fitdata_values:
@@ -270,7 +273,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             cr_nstd = cr_nstd, cr_width = cr_width,
                             cr_peak_spacing = cr_peak_spacing,
                             cr_removal_time = cr_removal_time)
-                
+
                 if correct_cic2:
                     for i in range(1, 3):
                         ftrim_on, s = apply_cic2_comp_psd(psd_onres[0], 10 ** (psd_onres[i] / 10), 1 / dt, trim=0.15)
@@ -280,8 +283,8 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                 row =\
                 save_psd(psd_onres, psd_offres, timestream_onres, timestream_offres,
                  cr_indices, theta_range, poly, xcal_data, figs, dt, None,
-                 out_directory, plot_directory, prefix = prefix, iq_fit_row = iq_fit_row)                
-                
+                 out_directory, plot_directory, prefix = prefix, iq_fit_row = iq_fit_row)
+
         except Exception as e:
             if not catch_exceptions:
                 raise e
@@ -296,19 +299,19 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
 
 def plot_fits_batch(directory, file_suffix, plot_directory):
     """
-    
+
 
     Parameters:
-    directory (str): directory containing the data to fit 
-    file_suffix (str): file suffix of the data 
+    directory (str): directory containing the data to fit
+    file_suffix (str): file suffix of the data
     plot_directory (str): directory to save plots
     """
     data = fit_iq(directory, None, file_suffix, 0, 0, 0, 0, 0, rejected_points = [],
-                      plotq = False, verbose = True, catch_exceptions = True) 
+                      plotq = False, verbose = True, catch_exceptions = True)
 
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgain, zgain, ffine, zfine, znoises, noise_dt, res_indices0 =\
-    import_iq_noise(directory, file_suffix, import_noiseq = False) 
+    import_iq_noise(directory, file_suffix, import_noiseq = False)
 
     fs, zs, popts, ress, res_indices = [], [], [], [], []
     for index in [d for d in range(len(fres)) if d not in fcal_indices]:
@@ -316,9 +319,9 @@ def plot_fits_batch(directory, file_suffix, plot_directory):
         p_amp, p_phase, p0, popt, perr, res, plot_path = separate_fit_row(row, prefix = 'iq')
 
         ff, zf = ffine[index], zfine[index]
-        zs.append(remove_gain(ff, zf, p_amp, p_phase)) 
-        fs.append(ff) 
-        popts.append(popt)  
+        zs.append(remove_gain(ff, zf, p_amp, p_phase))
+        fs.append(ff)
+        popts.append(popt)
         ress.append(res)
         res_indices.append(res_indices0[index])
         # fres.append(fres[index])
@@ -343,29 +346,29 @@ def plot_fits_batch(directory, file_suffix, plot_directory):
 
         data_indices = np.arange(ix0, ix1, 1)
 
-        naxs = len(f0) 
+        naxs = len(f0)
         nrows = naxs // max_n_cols
-        len_last_row = naxs % max_n_cols  
+        len_last_row = naxs % max_n_cols
         if len_last_row > max_n_cols or len_last_row == 0:
-            ncols = max_n_cols 
+            ncols = max_n_cols
         else:
             ncols = len_last_row
         fig, axs = plt.subplots(nrows, ncols, figsize = [3 * ncols, 2.5 * nrows], layout = 'tight')
         axs = axs.flatten()
         for index, ax in enumerate(axs):
-            ax.set(ylabel = 'Q', xlabel = 'I') 
+            ax.set(ylabel = 'Q', xlabel = 'I')
 
             f, z = f0[index], z0[index]
-            popt, res = popt0[index], res0[index] 
+            popt, res = popt0[index], res0[index]
             ri = res_ix0[index]
             fr = fres0[index]
             ax.set(title = f'Fn {ri}')
-             
-            color = plt.cm.viridis(0.) 
-            
-            ax.plot(np.real(z), np.imag(z), '.', color = color) 
-            fsamp = np.linspace(min(f), max(f), 200) 
-            zsamp = nonlinear_iq(fsamp, *popt) 
+
+            color = plt.cm.viridis(0.)
+
+            ax.plot(np.real(z), np.imag(z), '.', color = color)
+            fsamp = np.linspace(min(f), max(f), 200)
+            zsamp = nonlinear_iq(fsamp, *popt)
             ax.plot(np.real(zsamp), np.imag(zsamp), '--k')
 
         save_fig(fig, f'fres_update_{fig_index}', plot_directory, ftype = 'png',
