@@ -294,8 +294,6 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     return data_new
 
 
-
-
 def plot_fits_batch(directory, file_suffix, plot_directory):
     """
     

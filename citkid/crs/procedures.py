@@ -116,11 +116,15 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
         np.save(out_directory + filename, 1 / fsample_noise)
 
     if take_fast_noise:
-        for data_index in range(len(fres)):
+        pbar = range(len(fres)) 
+        if verbose:
+            pbar = tqdm(pbar, total = len(fres), leave = False)
+            pbar.set_description('Fast noise index')
+        for data_index in pbar:
             frequency, amplitude = fres[data_index], ares[data_index]
             for noise_index in range(n_fast_noise):
-                filename = 'noise_fast{file_suffix}_DI{data_index:04d}NI{noise_index:02d}.npy'
-                fraw, z = crs.capture_fast_noise(frequency, amplitude, fast_noise_time, verbose = True)
+                filename = f'noise_fast{file_suffix}_DI{data_index:04d}NI{noise_index:02d}.npy'
+                fraw, z = await inst.capture_fast_noise(frequency, amplitude, fast_noise_time, verbose = True)
                 np.save(out_directory + filename, [fraw, np.real(z), np.imag(z)])
 
 async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,

@@ -286,8 +286,8 @@ class CRS:
         frd = frequency - nco_freq0
         ix = np.argmin(np.abs(frd - bin_centers)) 
         center_offset_freq = frd - bin_centers[ix] 
-        nco_freq_dict_temp = {module_index: nco_freq0 + center_offset}
-        self.set_nco(nco_freq_dict_temp, verbose = verbose)
+        nco_freq_dict_temp = {module_index: nco_freq0 + center_offset_freq}
+        await self.set_nco(nco_freq_dict_temp, verbose = verbose)
         # Write tones and get noise 
         await self.write_tones([frequency], [amplitude])
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
