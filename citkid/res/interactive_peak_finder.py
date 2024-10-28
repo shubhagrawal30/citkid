@@ -472,12 +472,12 @@ class qresFinderSingle:
         self.ydata_ix = (self.x_data <= self.fmax) & (self.x_data >= self.fmin)
 
         self.iq_scatter = self.ax_iq.plot(np.real(self.y_data), 
-                                          np.imag(self.y_data), 'o', color = plt.cm.viridis(0.))
+                                          np.imag(self.y_data), '.', color = plt.cm.viridis(0.))
         if self.x_data_previous is not None:
             self.iq_scatter_p = self.ax_iq_p.plot(np.real(self.y_data_previous), 
-                                            np.imag(self.y_data_previous), 'o', color = plt.cm.viridis(0.))
+                                            np.imag(self.y_data_previous), '.', color = plt.cm.viridis(0.))
         self.iq_cut = self.ax_iq.plot(np.real(self.y_data[self.ydata_ix]),
-                                      np.imag(self.y_data[self.ydata_ix]), 'o', color = plt.cm.viridis(0.67),
+                                      np.imag(self.y_data[self.ydata_ix]), '.', color = plt.cm.viridis(0.67),
                                        alpha = 1)
         ix = np.argmin(abs(self.fres - self.x_data))
         self.fres_point = self.ax_iq.plot(np.real(self.y_data[ix]), 
@@ -566,7 +566,7 @@ class qresFinderSingle:
                                                    color = plt.cm.viridis(0.67), alpha = 0.3)
             self.iq_cut = self.ax_iq.plot(np.real(self.y_data[self.ydata_ix]),
                                           np.imag(self.y_data[self.ydata_ix]), 
-                                          'o', color = plt.cm.viridis(0.67), alpha = 0.8)
+                                          '.', color = plt.cm.viridis(0.67), alpha = 0.8)
         for p in self.fres_point:
             p.remove()
             print(p)
@@ -863,22 +863,32 @@ def run_qres_opt(out_directory, f, z, fres, qres, ares, fcal_indices, res_indice
     f, z = np.asarray(f), np.asarray(z) 
     fres, qres, ares = np.asarray(fres), np.asarray(qres), np.asarray(ares) 
     fcal_indices, bypass_indices = np.asarray(fcal_indices), np.asarray(bypass_indices) 
-    f_previous, z_previous = np.asarray(f_previous), np.asarray(z_previous) 
-    fres_previous, ares_previous = np.asarray(fres_previous), np.asarray(ares_previous)
-    
+
     onres_indices = [i for i in range(len(fres)) if i not in fcal_indices and res_indices[i] not in bypass_indices]
     fres_outpaths = [out_directory + f'fres_{ri:04d}.npy' for ri in res_indices[onres_indices]]
     span_outpaths = [out_directory + f'span_{ri:04d}.npy' for ri in res_indices[onres_indices]]
-
     titles = np.array([f'{round(a, 2)} dB' for a in ares])
-    titles_previous = np.array([f'{round(a, 2)} dB' for a in ares_previous])
+
+    if f_previous is not None:
+        f_previous, z_previous = np.asarray(f_previous), np.asarray(z_previous) 
+        fres_previous, ares_previous = np.asarray(fres_previous), np.asarray(ares_previous)
+        x_datas_previous = f_previous[onres_indices]
+        y_datas_previous = z_previous[onres_indices]
+        titles_previous = np.array([f'{round(a, 2)} dB' for a in ares_previous])
+        titles_previous = titles_previous[onres_indices]
+        fres_previous = fres_previous[onres_indices]
+    else:
+        x_datas_previous = None 
+        y_datas_previous = None 
+        titles_previous = None 
+    
     qresFinder(f[onres_indices], z[onres_indices], fres[onres_indices], 
                fres[onres_indices] / qres[onres_indices], fres_outpaths, span_outpaths, 
-               x_datas_previous = f_previous[onres_indices], 
-               y_datas_previous = z_previous[onres_indices],
+               x_datas_previous = x_datas_previous, 
+               y_datas_previous = y_datas_previous,
                res_indices = res_indices[onres_indices],
-               fress_previous = fres_previous[onres_indices],
-               titles_previous = titles_previous[onres_indices], titles = titles[onres_indices],
+               fress_previous = fres_previous,
+               titles_previous = titles_previous, titles = titles[onres_indices],
                ares = None, ares_title = 'power (dBm)')
 
     fres = fres.copy()

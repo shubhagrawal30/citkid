@@ -521,8 +521,10 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, nsamps = 10,
             nsamples_discard = 0 # 15
             # take data and loopback calibration data
             await d.set_dmfd_routing(d.ROUTING.CARRIER, module_index)
+            sleep(0.5)
             samples_cal = await d.py_get_samples(20 + nsamples_discard, module = module_index )
             await d.set_dmfd_routing(d.ROUTING.ADC, module_index)
+            sleep(0.5)
             samples = await d.py_get_samples(nsamps + nsamples_discard,module = module_index)
             # format and average data 
             zi = np.asarray(samples.i) + 1j * np.asarray(samples.q)
