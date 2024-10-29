@@ -13,6 +13,7 @@ from .util import volts_to_dbm, remove_internal_phaseshift, convert_parser_to_z
 from .util import volts_per_roc
 from .util import find_key_and_index
 from hidfmux.core.utils.transferfunctions import apply_pfb_correction
+from hidfmux.core.utils import transferfunctions
 from hidfmux.analysis.noise_processing import separate_iq_fft_to_i_and_q
  
 class CRS:
@@ -244,7 +245,6 @@ class CRS:
         bw = 600e6 / 1024 + 200
         spacing = bw / npoints 
         fres = np.concatenate([np.linspace(nco - 300e6 + 10 + bw, nco + 300e6 - 10 - bw, 1024) for nco in ncos])
-        fres += np.random.uniform(-10, 10, len(fres))
         ares = amplitude * np.ones(len(fres))
         f, z = await self.sweep_linear(fres, ares, bw = bw - spacing, npoints = npoints,
                                       nsamps = nsamps, verbose = verbose, 
@@ -436,6 +436,11 @@ async def write_tones(module, nco_freq_dict, fres_dict, ares_dict):
         fres, ares = fres_dict[module_index], ares_dict[module_index]
         fres = np.asarray(fres) 
         ares = np.asarray(ares)
+        # Randomize frequencies a little
+        fres += np.random.uniform(-50, 50, fres.shape)
+        comb_sampling_freq = transferfunctions.get_comb_sampling_freq()
+        threshold = 101.
+        fres[fres%(comb_sampling_freq/512) < threshold] += threshold
         # Check NCO and input parameters
         try:
             nco = nco_freq_dict[module_index]
@@ -483,6 +488,12 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, swe
         d = module.crs
         module_index = module.module  
         frequencies, ares = np.asarray(frequencies_dict[module_index]), np.asarray(ares_dict[module_index])
+        # Randomize frequencies a little
+        frequencies += np.random.uniform(-50, 50, frequencies.shape)
+        comb_sampling_freq = transferfunctions.get_comb_sampling_freq()
+        threshold = 101.
+        frequencies[frequencies%(comb_sampling_freq/512) < threshold] += threshold
+
         if not len(frequencies):
             return np.array([], dtype = float), np.array([], dtype = complex)
         nco_freq = nco_freq_dict[module_index]
