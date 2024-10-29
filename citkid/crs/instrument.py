@@ -81,7 +81,7 @@ class CRS:
             raise ValueError('modules must be in range [1, 4]')
         await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).set_nco(nco_freq_dict)
         for key, value in nco_freq_dict.items():
-            self.nco_freq_dict[key] = value 
+            self.nco_freq_dict[key] = await self.d.get_nco_frequency(self.d.UNITS.HZ, module = key)
             if verbose:
                 print(f'Module {key} NCO is {round(value * 1e-6, 6)} MHz') 
         
@@ -130,8 +130,6 @@ class CRS:
         verbose (bool): If True, displays a progress bar while sweeping 
         pbar_description (str): description for the progress bar 
         """ 
-        self.d.sweep_f = {} 
-        self.d.sweep_z = {}
         frequencies, ares = np.asarray(frequencies), np.asarray(ares)
         # Split frequencies and ares into dictionaries 
         if not len(self.nco_freq_dict):
@@ -158,7 +156,9 @@ class CRS:
         await self.d.set_fir_stage(fir_stage) 
         # Sweep 
         modules = list(self.frequencies_dict.keys())
+        sweep_f, sweep_z = {}, {}
         await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).sweep(self.nco_freq_dict, self.frequencies_dict, self.ares_dict, 
+                                                                                   sweep_f, sweep_z,
                                                                                    nsamps = nsamps, verbose = verbose, 
                                                                                    pbar_description = pbar_description)
         # Create f, z from sweep results 
@@ -167,8 +167,8 @@ class CRS:
         z = np.empty(frequencies.shape, dtype = complex)
         for res_index in range(nres):
             module_index, ch_index = find_key_and_index(self.ch_ix_dict, res_index) 
-            f[res_index] = self.d.sweep_f[module_index][ch_index]
-            z[res_index] = self.d.sweep_z[module_index][ch_index]
+            f[res_index] = sweep_f[module_index][ch_index]
+            z[res_index] = sweep_z[module_index][ch_index]
         z /= 10 ** (ares[:, np.newaxis] / 20)
         if self.splitter:
             z /= 10 ** (-10.5 * 2 / 20) # 10.5 dB loss in either direction 
@@ -209,9 +209,7 @@ class CRS:
         Parameters:
         fres (array-like): center frequencies in Hz 
         ares (array-like): amplitudes in dBm
-        qres (array-like): spans of each sweep given as a quality-factor-like 
-            value: spans = fres / qres 
-        npoints (int): number of sweep points per channel
+        qres (arrz_noise_dict(int): number of sweep points per channel
         nsamps (int): number of samples to average per point 
         verbose (bool): If True, displays a progress bar while sweeping 
         pbar_description (str): description for the progress bar 
@@ -237,10 +235,7 @@ class CRS:
         Parameters:
         amplitude (float): amplitude in dBm
         npoints (int): number of sweep points per channel
-        nsamps (int): number of samples to average per point 
-        verbose (bool): If True, displays a progress bar while sweeping 
-        pbar_description (str): description for the progress bar 
-
+        nsamps (iz_noise_dict
         Returns:
         f (np.array): array of frequencies in Hz 
         z (np.array): array of complex S21 data corresponding to f 
@@ -264,7 +259,7 @@ class CRS:
         Captures noise with a 2.44 MHz sample rate on a single channel. Turns on only 
         a single channel to avoid noise spikes from neighboring channels. Note that 
         the output will have to be corrected for the nonlinear PFB bin after taking a 
-        PSD. It is harder to correct the timestream so single-photon events and 
+        PSD. It iz_noise_dicts harder to correct the timestream so single-photon events and 
         cosmic rays will not have the correct shape. 
         Temporarily changes the NCO frequency to center the tone on a PFB bin 
         
@@ -287,10 +282,7 @@ class CRS:
         ix = np.argmin(np.abs(frd - bin_centers)) 
         center_offset_freq = frd - bin_centers[ix] 
         nco_freq_dict_temp = {module_index: nco_freq0 + center_offset_freq}
-        await self.set_nco(nco_freq_dict_temp, verbose = verbose)
-        # Write tones and get noise 
-        await self.write_tones([frequency], [amplitude])
-        await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
+        await self.sz_noise_dict.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
         sleep(1)
         pfb_samples = await self.d.get_pfb_samples(int(nsamps), 'RAW', 1, module_index) # May have 20% exact difference 
         pfb_samples = np.array([complex(*sample) for sample in pfb_samples])
@@ -364,9 +356,9 @@ class CRS:
         await self.write_tones(fres, ares)
         sleep(1)
         # Get the calibration data 
-        self.d.noise_zcal_dict = {}
+        noise_zcal_dict = {}
         modules = list(self.ch_ix_dict.keys())
-        await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).get_noise_cal(self.fres_dict)
+        await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).get_noise_cal(self.fres_dict, noise_zcal_dict)
         sleep(0.1)
         # sleep(10)
         # raise Exception('Make this sleep statement longer')
@@ -387,11 +379,11 @@ class CRS:
         zcal = [[]] * nres 
         for module_index in module_indices:
             zrawi = convert_parser_to_z(data_path, self.crs_sn, module_index, ntones = len(self.ch_ix_dict[module_index])) 
-            zi = remove_internal_phaseshift(self.fres_dict[module_index][:, np.newaxis], zrawi, self.d.noise_zcal_dict[module_index][:, np.newaxis])
+            zi = remove_internal_phaseshift(self.fres_dict[module_index][:, np.newaxis], zrawi, noise_zcal_dict[module_index][:, np.newaxis])
             for index, ch_index in enumerate(self.ch_ix_dict[module_index]):
                 z[ch_index] = zi[index]
                 zraw[ch_index] = zrawi[index]
-                zcal[ch_index] = self.d.noise_zcal_dict[module_index][index]
+                zcal[ch_index] = noise_zcal_dict[module_index][index]
         # Sometimes the number of points is not exact
         data_len = min([len(zi) for zi in z]) 
         z = np.array([zi[:data_len] for zi in z])
@@ -467,7 +459,7 @@ async def write_tones(module, nco_freq_dict, fres_dict, ares_dict):
             await ctx()
 
 @rfmux.macro(rfmux.ReadoutModule, register=True)
-async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, nsamps = 10, 
+async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, sweep_z, nsamps = 10, 
                 verbose = True, pbar_description = 'Sweeping'):
         """
         Performs a frequency sweep and returns the complex S21 value at each frequency. Performs sweeps over 
@@ -538,11 +530,11 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, nsamps = 10,
             z[:, sweep_index] = zi * d.volts_per_roc 
         # Turn off channels 
         await d.clear_channels(module = module_index)
-        d.sweep_f[module_index] = frequencies 
-        d.sweep_z[module_index] = z
+        sweep_f[module_index] = frequencies 
+        sweep_z[module_index] = z
 
 @rfmux.macro(rfmux.ReadoutModule, register=True) 
-async def get_noise_cal(module, fres_dict):
+async def get_noise_cal(module, fres_dict, noise_zcal_dict):
     """
     Acquires noise calibration data 
 
@@ -562,4 +554,4 @@ async def get_noise_cal(module, fres_dict):
     zcal = np.mean(zcal[:len(fres), nsamples_discard:], axis = 1)
     await d.set_dmfd_routing(d.ROUTING.ADC, module_index)
     np.save(f'tmp/zcal_{module_index}.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
-    d.noise_zcal_dict[module_index] = zcal 
+    noise_zcal_dict[module_index] = zcal 
