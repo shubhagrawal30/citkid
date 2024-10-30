@@ -451,8 +451,12 @@ class qresFinderSingle:
                                   color=plt.cm.viridis(0.), linewidth=1)
         # Set axis limits
         xd = (max(self.x_data) - min(self.x_data)) / 10 * 1e-3
-        self.ax.set_xlim(min(self.x_data) / 1e3 - xd - self.x0, 
-                         max(self.x_data) / 1e3 + xd - self.x0)
+        if self.fres_previous is not None:
+            xx = self.x_data_previous 
+        else:
+            xx = self.x_data 
+        self.ax.set_xlim(min(xx) / 1e3 - xd - self.x0, 
+                         max(xx) / 1e3 + xd - self.x0)
         yd = (max(self.dB_data) - min(self.dB_data)) / 10
         self.ymin = min(self.dB_data) - yd
         self.ymax = max(self.dB_data) + yd

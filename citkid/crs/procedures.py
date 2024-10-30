@@ -124,7 +124,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
             frequency, amplitude = fres[data_index], ares[data_index]
             for noise_index in range(n_fast_noise):
                 filename = f'noise_fast{file_suffix}_DI{data_index:04d}NI{noise_index:02d}.npy'
-                fraw, z = await inst.capture_fast_noise(frequency, amplitude, fast_noise_time, verbose = True)
+                fraw, z = await inst.capture_fast_noise(frequency, amplitude, fast_noise_time, verbose = False)
                 np.save(out_directory + filename, [fraw, np.real(z), np.imag(z)])
 
 async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,
@@ -187,8 +187,8 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, ou
     # Make qres for sweeps that works with cal tones
     qres0 = qres.copy()
     qres0[fcal_indices] = np.median(qres)
-    # write initial target comb
-    await inst.write_tones(fres, ares)
+    # # write initial target comb
+    # await inst.write_tones(fres, ares)
     # rough sweep
     filename = f's21_rough{file_suffix}.npy'
     f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints,
@@ -198,7 +198,7 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, ou
     fres = update_fres(f, z, fres, spans, fcal_indices,
                         method = fres_update_method, plotq = plotq, res_indices = res_indices, 
                         plot_directory = plot_directory, cable_delay = cable_delay)
-    np.save(out_directory + f'fres_interim_{file_suffix}.npy', fres) 
+    np.save(out_directory + f'fres_interim{file_suffix}.npy', fres) 
 
 
 # Haven't started adapting this one yet

@@ -55,19 +55,24 @@ class CRS:
             await self.d.set_timestamp_port(self.d.TIMESTAMP_PORT.TEST)  
         
         await self.d.set_clock_source(clock_source)
+
+        await self.d.set_analog_bank(high = analog_bank_high)
+        self.analog_bank_high = analog_bank_high
         for module_index in range(1, 5):
             await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
-            await self.d.set_dac_scale(full_scale_dbm, self.d.UNITS.DBM, module_index)
+            m = module_index
+            if self.analog_bank_high:
+                m += 4
+            await self.d.set_dac_scale(full_scale_dbm, self.d.UNITS.DBM, m)
         self.full_scale_dbm = full_scale_dbm
         self.d.full_scale_dbm = full_scale_dbm
-        
+                
         sleep(1)
         if verbose:
             print('System configured')
             print("Clocking source is", await self.d.get_clock_source())
 
-        await self.d.set_analog_bank(high = analog_bank_high)
-
+        
     async def set_nco(self, nco_freq_dict, verbose = True):
         """Set the NCO frequency
         
@@ -78,11 +83,17 @@ class CRS:
         verbose (bool): If True, gets and prints the NCO frequencies
         """
         modules = list(nco_freq_dict.keys())
-        if any([m not in [1, 2, 3, 4] for m in modules]):
-            raise ValueError('modules must be in range [1, 4]')
-        await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).set_nco(nco_freq_dict)
-        for key, value in nco_freq_dict.items():
-            self.nco_freq_dict[key] = await self.d.get_nco_frequency(self.d.UNITS.HZ, module = key)
+        if any([m not in [1,2,3,4] for m in modules]):
+            raise ValueError(f'modules must be in range [1, 4]')
+        modules = list(nco_freq_dict.keys())
+        await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).set_nco(nco_freq_dict, 
+                self.analog_bank_high)
+        for key, value in nco_freq_dict.items(): 
+            if self.analog_bank_high:
+                i = 4 
+            else:
+                i = 0
+            self.nco_freq_dict[key] = await self.d.get_nco_frequency(self.d.UNITS.HZ, module = key + i)
             if verbose:
                 print(f'Module {key} NCO is {round(value * 1e-6, 6)} MHz') 
         
@@ -403,7 +414,7 @@ class CRS:
 ######################################################################################################
 
 @rfmux.macro(rfmux.ReadoutModule, register=True)
-async def set_nco(module, nco_freq_dict):
+async def set_nco(module, nco_freq_dict, analog_bank_high):
         """Set the NCO frequency
         
         Parameters:
@@ -413,7 +424,9 @@ async def set_nco(module, nco_freq_dict):
         """
         d = module.crs
         module_index = module.module
-        nco_freq = nco_freq_dict[module_index]
+        nco_freq = nco_freq_dict[module_index] 
+        if analog_bank_high:
+            module_index += 4
         await d.set_nco_frequency(nco_freq, d.UNITS.HZ, module = module_index)
 
 @rfmux.macro(rfmux.ReadoutModule, register=True)
@@ -454,10 +467,9 @@ async def write_tones(module, nco_freq_dict, fres_dict, ares_dict):
         
         await d.clear_channels(module = module_index)
         
-        nco = await d.get_nco_frequency(d.UNITS.HZ, module=module_index)
         async with d.tuber_context() as ctx:
             for ch, (fr, ar) in enumerate(zip(fres, ares_amplitude)):
-                ## To be wrapped in context_manager
+                ## To be wrapped in context_manager 
                 ctx.set_frequency(fr - nco, d.UNITS.HZ, ch + 1, module=module_index)
                 ctx.set_amplitude(ar, d.UNITS.NORMALIZED, target = d.TARGET.DAC, channel=ch+1, 
                                   module=module_index)
