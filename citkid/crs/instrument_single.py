@@ -165,7 +165,7 @@ class CRS:
         return f, z 
 
     async def sweep(self, frequencies, ares, nsamps = 10, verbose = True, pbar_description = 'Sweeping',
-                    return_raw = False):
+                    return_raw = False, nstd_thresh = 1):
         """
         Performs a frequency sweep and returns the complex S21 value at each frequency. Performs sweeps over 
         axis 0 of frequencies simultaneously 
@@ -220,14 +220,25 @@ class CRS:
 
             # take data and loopback calibration data
             await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, self.module_index)
-            samples_cal = await self.d.get_samples(21,module=self.module_index)
+            samples_cal = await self.d.py_get_samples(20,module=self.module_index)
             await self.d.set_dmfd_routing(self.d.ROUTING.ADC, self.module_index)
-            samples = await self.d.get_samples(nsamps + 1,module=self.module_index)
+            samples = await self.d.py_get_samples(nsamps,module=self.module_index)
             # format and average data 
             zi = np.asarray(samples.i) + 1j * np.asarray(samples.q)
-            zi = np.mean(zi[:n_channels, 1:] , axis = 1)
+            # Remove cosmic rays 
+            for di in range(len(zi)):
+                zii = zi[di] 
+                ix = list(range(len(zii)))
+                nstd_thresh0 = nstd_thresh
+                while not (len(zii) - len(ix)) > nsamps / 10:
+                    zii_abs = np.abs(zii - np.mean(zii))
+                    ix = np.where(zii_abs > np.std(zii_abs) * nstd_thresh0)[0]
+                    nstd_thresh0 += 0.1
+                zi[di][ix] = np.nan
+            #average 
+            zi = np.nanmean(zi[:n_channels, :] , axis = 1) 
             zical = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-            zical = np.mean(zical[:n_channels, 1:], axis = 1)
+            zical = np.mean(zical[:n_channels, :], axis = 1)
             # adjust for loopback calibration
             zcal[:, sweep_index] = zical 
             zraw[:, sweep_index] = zi 
@@ -372,7 +383,7 @@ class CRS:
         sleep(1)
         # Get calibration data
         await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, self.module_index) 
-        samples_cal = await self.d.get_samples(21, module=self.module_index)
+        samples_cal = await self.d.py_get_samples(21, module=self.module_index)
         zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
         zcal = np.mean(zcal[:len(fres), 1:], axis = 1)
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, self.module_index)
