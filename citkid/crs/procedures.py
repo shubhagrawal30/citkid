@@ -74,13 +74,11 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
             fcal_indices)
     np.save(out_directory + f'res_indices{file_suffix}.npy', res_indices)
     if fres_all is not None:
-        np.save(out_directory + f'fres_all{file_suffix}.npy', ares)
-        np.save(out_directory + f'qres_all{file_suffix}.npy', ares)
+        np.save(out_directory + f'fres_all{file_suffix}.npy', fres)
+        np.save(out_directory + f'qres_all{file_suffix}.npy', qres)
     # Make qres for sweeps that works with cal tones
     qres0 = qres.copy()
     qres0[fcal_indices] = np.median(qres)
-    # write initial target comb
-    await inst.write_tones(fres, ares)
     # rough sweep
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'

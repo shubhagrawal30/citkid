@@ -333,16 +333,55 @@ class CRS:
         f, z = f[ix], z[ix]
         return f, z
 
-    async def capture_noise_sequential(self, fres, ares, noise_time, fir_stage = 6,
+    async def capture_noise(self, fres, ares, noise_time, fir_stage = 6,
                             parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
                             interface='enp2s0', delete_parser_data = False,
                             verbose = True):
-        z = self.capture_noise(fres, ares, noise_time, fir_stage = fir_stage,
+        fres, ares = np.asarray(fres), np.asarray(ares)
+        self.nco_freq_dict = {key: nco for key, nco in enumerate(self.ncos)}
+        # Split frequencies and ares into dictionaries 
+        if not len(self.nco_freq_dict):
+            raise Exception("NCO frequencies are not set")  
+
+        channel_indices = list(range(len(fres))) 
+        self.fres_dict = {key: [] for key in range(len(self.ncos))}
+        self.ares_dict = {key: [] for key in range(len(self.ncos))}
+        self.ch_ix_dict = {key: [] for key in range(len(self.ncos))}
+        for ch_ix, fr, ar in zip(channel_indices, fres, ares):
+            nco_index = min(self.nco_freq_dict, key = lambda k: np.abs(self.nco_freq_dict[k] - fr))
+            self.fres_dict[nco_index].append(fr) 
+            self.ares_dict[nco_index].append(ar) 
+            self.ch_ix_dict[nco_index].append(ch_ix)
+        self.fres_dict = {key: np.asarray(value) for key, value in self.fres_dict.items()}
+        self.ares_dict = {key: np.asarray(value) for key, value in self.ares_dict.items()}
+        self.ch_ix_dict = {key: np.asarray(value) for key, value in self.ch_ix_dict.items()}
+        for nco_index in self.nco_freq_dict.keys():
+            if any(np.abs(self.fres_dict[nco_index] - self.nco_freq_dict[nco_index]).flatten() > 300e6):
+                raise ValueError('All of frequencies must be within 300 MHz of an NCO frequency') 
+        
+        z = None
+        for nco_index, nco_freq in self.nco_freq_dict.items():
+            await self.set_nco(self.module_index, nco_freq, verbose = False)
+            sleep(1) 
+            zi = await self.capture_noise_single(self.fres_dict[nco_index], self.ares_dict[nco_index], 
+                                                 noise_time, fir_stage = fir_stage,
                                parser_loc=parser_loc, interface=interface,
                                delete_parser_data = delete_parser_data,
                                verbose = verbose, return_raw = False)
+            if z is None:
+                z = np.empty((len(fres), len(zi[0])), dtype = complex)
+            # Make sure z arrays are all the same size
+            len_diff = len(zi[0]) - len(z[0])
+            if len_diff > 0:
+                zi = zi[:, :-len_diff]
+            if len_diff < 0:
+                z = z[:, :len_diff]
+            for ch_ix, zii in zip(self.ch_ix_dict[nco_index], zi):
+                z[ch_ix] = zii
+        return z
+        
 
-    async def capture_noise(self, fres, ares, noise_time, fir_stage = 6,
+    async def capture_noise_single(self, fres, ares, noise_time, fir_stage = 6,
                             parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
                             interface='enp2s0', delete_parser_data = False,
                             verbose = True, return_raw = False):
@@ -363,7 +402,7 @@ class CRS:
             after importing the data 
         
         Returns:
-        """
+        """ 
         if fir_stage <= 4:
             warning (f"packets will drop if fir_stage < 5", UserWarning)
         fres, ares = np.asarray(fres), np.asarray(ares) 
@@ -375,7 +414,7 @@ class CRS:
         await self.d.set_fir_stage(fir_stage) # Probably will drop packets after 4
         # get_samples will error if fir_stage is too low, but parser will not error
         self.sample_frequency = 625e6 / (256 * 64 * 2 ** fir_stage) 
-        print(f'fir stage is {await self.d.get_fir_stage()}')
+        # print(f'fir stage is {await self.d.get_fir_stage()}')
 
         
         # set the tones
@@ -383,22 +422,24 @@ class CRS:
         sleep(1)
         # Get calibration data
         await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, self.module_index) 
-        samples_cal = await self.d.py_get_samples(21, module=self.module_index)
+        samples_cal = await self.d.py_get_samples(20, module=self.module_index)
         zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-        zcal = np.mean(zcal[:len(fres), 1:], axis = 1)
+        zcal = np.mean(zcal[:len(fres)], axis = 1)
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, self.module_index)
         np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
         sleep(0.1)
         # Collect the data 
-        num_samps = int(self.sample_frequency*noise_time)
+        num_samps = iint(self.sample_frequency*(noise_time + 10))
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
                                    f'{self.crs_sn:04d}', '-m', str(self.module_index), '-n', str(num_samps)], 
                                    shell=False)
-        pbar = list(range(int(noise_time) + 2))
+        pbar = list(range(int(noise_time) + 10))
         if verbose:
             pbar = tqdm(pbar, leave = False)
         for i in pbar:
             sleep(1) 
+        # Set fir stage back
+        await self.d.set_fir_stage(6)
         # read the data and convert to z
         zraw = convert_parser_to_z(data_path, self.crs_sn, self.module_index, ntones = len(fres))
         z = remove_internal_phaseshift(fres[:, np.newaxis], zraw, zcal[:, np.newaxis])

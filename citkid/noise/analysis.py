@@ -7,7 +7,7 @@ from .cosmic_rays import remove_cosmic_rays
 def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                 znoise_offres = None, dt_offres = None, flag_crs = True,
                 deglitch_nstd = 5, plot_calq = True, plot_psdq = True,
-                plot_timestreamq = True, **cr_kwargs):
+                plot_timestreamq = True, min_cal_points = 5, **cr_kwargs):
     """
     Computes parallel and perpendicular noise PSDs, as well as Sxx
 
@@ -86,7 +86,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
         theta_fine, theta_offres, theta_offres_clean, A_offres_clean =\
         calibrate_timestreams(origin, ffine, zfine, fnoise_offres,
                               znoise_offres, dt_offres, deglitch_nstd,
-                              flag_crs = False, offres = True)
+                              flag_crs = False, offres = True, min_cal_points = min_cal_points)
 
         spar_offres = 10 * np.log10(get_psd(radius * theta_offres_clean, dt_offres))
         sper_offres = 10 * np.log10(get_psd(A_offres_clean, dt_offres))
@@ -100,6 +100,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
         theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices =\
         calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
                               deglitch_nstd, flag_crs = flag_crs, offres = False,
+                              min_cal_points = min_cal_points,
                               **cr_kwargs)
 
         sxx = get_psd(x, dt)
@@ -195,7 +196,8 @@ def compute_psd_simple(ffine, zfine, fnoise, znoise, dt, deglitch_nstd = 5):
 ################################################################################
 
 def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
-                          deglitch_nstd, flag_crs, offres = False, **cr_kwargs):
+                          deglitch_nstd, flag_crs, offres = False, 
+                          min_cal_points = 5, **cr_kwargs):
     """
     Calculates theta and x timestreams given complex IQ noise timestreams.
     1) calculate theta of the sweep data an noise timestream
@@ -249,7 +251,7 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
         theta_clean = theta.copy()
     # Calibrate x
     poly, theta_range = \
-        calibrate_x(ffine, theta_fine, theta_clean)
+        calibrate_x(ffine, theta_fine, theta_clean, min_cal_points = min_cal_points)
 
     fs_clean = np.polyval(poly, theta_clean)
     x = 1 - fs_clean / fnoise

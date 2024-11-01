@@ -159,7 +159,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
 
 def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   plot_calq = False, plot_psdq = False, correct_cic2 = False,
-                  plot_timestreamq = False, plot_factor = 1,
+                  plot_timestreamq = False, plot_factor = 1, min_cal_points = 5,
                   deglitch_nstd = 10, cr_nstd = 5, cr_width = 100e-6,
                   cr_peak_spacing = 100e-6, cr_removal_time = 1e-3,
                   overwrite = False, verbose = False, catch_exceptions = False):
@@ -249,7 +249,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             dt_offres = dt, flag_crs = False,
                             deglitch_nstd = deglitch_nstd,
                             plot_calq = plot_calq_single,
-                            plot_psdq = plot_psdq_single,
+                            plot_psdq = plot_psdq_single, min_cal_points = min_cal_points,
                             plot_timestreamq = plot_timestreamq_single)
                 if correct_cic2:
                     for i in range(1, 3):
@@ -268,7 +268,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             dt_offres = None, flag_crs = True,
                             deglitch_nstd = deglitch_nstd,
                             plot_calq = plot_calq_single,
-                            plot_psdq = plot_psdq_single,
+                            plot_psdq = plot_psdq_single, min_cal_points = min_cal_points,
                             plot_timestreamq = plot_timestreamq_single,
                             cr_nstd = cr_nstd, cr_width = cr_width,
                             cr_peak_spacing = cr_peak_spacing,
