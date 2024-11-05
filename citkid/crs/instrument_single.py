@@ -220,6 +220,7 @@ class CRS:
 
             # take data and loopback calibration data
             await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, self.module_index)
+
             samples_cal = await self.d.py_get_samples(20,module=self.module_index)
             await self.d.set_dmfd_routing(self.d.ROUTING.ADC, self.module_index)
             samples = await self.d.py_get_samples(nsamps,module=self.module_index)
@@ -428,8 +429,8 @@ class CRS:
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, self.module_index)
         np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
         sleep(0.1)
-        # Collect the data 
-        num_samps = iint(self.sample_frequency*(noise_time + 10))
+        # Collect th data 
+        num_samps = int(self.sample_frequency*(noise_time + 10))
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
                                    f'{self.crs_sn:04d}', '-m', str(self.module_index), '-n', str(num_samps)], 
                                    shell=False)
@@ -443,10 +444,9 @@ class CRS:
         # read the data and convert to z
         zraw = convert_parser_to_z(data_path, self.crs_sn, self.module_index, ntones = len(fres))
         z = remove_internal_phaseshift(fres[:, np.newaxis], zraw, zcal[:, np.newaxis])
-        # z = remove_internal_phaseshift_noise(fres[:, np.newaxis], z, ffine, zfine) 
-        # z *= np.exp(1j * 0.8394967866987446)
         if delete_parser_data:
             shutil.rmtree('tmp/')
+        z /= 10 ** (ares[:, np.newaxis] / 20)
         if return_raw:
             return z, zcal, zraw
         return z
@@ -488,4 +488,5 @@ class CRS:
 
         # Max of nsamps is 1e5 
         z = remove_internal_phaseshift(frequency, zraw, zcal) * self.volts_per_roc
+        z /= 10 ** (ares[:, np.newaxis] / 20)
         return fraw, z

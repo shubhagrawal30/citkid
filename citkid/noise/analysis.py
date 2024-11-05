@@ -7,7 +7,8 @@ from .cosmic_rays import remove_cosmic_rays
 def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                 znoise_offres = None, dt_offres = None, flag_crs = True,
                 deglitch_nstd = 5, plot_calq = True, plot_psdq = True,
-                plot_timestreamq = True, min_cal_points = 5, **cr_kwargs):
+                plot_timestreamq = True, min_cal_points = 5, 
+                circfit_npoints = None, **cr_kwargs):
     """
     Computes parallel and perpendicular noise PSDs, as well as Sxx
 

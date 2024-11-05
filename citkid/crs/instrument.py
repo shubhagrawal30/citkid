@@ -318,6 +318,7 @@ class CRS:
         # Adjust NCO back to its original value 
         nco_freq_dict_temp = {module_index: nco_freq0}
         self.set_nco(nco_freq_dict_temp, verbose = verbose)
+        z /= 10 ** (ares[:, np.newaxis] / 20)
         return fraw, z
 
     async def capture_noise(self, fres, ares, noise_time, fir_stage = 6,
@@ -383,6 +384,8 @@ class CRS:
             pbar = tqdm(pbar, leave = False)
         for i in pbar:
             sleep(1) 
+        # Set fir stage back
+        await self.d.set_fir_stage(6)
         # read the data and convert to z 
         nres = len(fres)
         z = [[]] * nres

@@ -161,7 +161,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   plot_calq = False, plot_psdq = False, correct_cic2 = False,
                   plot_timestreamq = False, plot_factor = 1, min_cal_points = 5,
                   deglitch_nstd = 10, cr_nstd = 5, cr_width = 100e-6,
-                  cr_peak_spacing = 100e-6, cr_removal_time = 1e-3,
+                  cr_peak_spacing = 100e-6, cr_removal_time = 1e-3, circfit_npoints = None,
                   overwrite = False, verbose = False, catch_exceptions = False):
     """
     Analyze noise data to produce timestreams and PSDs
@@ -186,6 +186,8 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     cr_width (int): width of cosmic rays in seconds
     cr_peak_spacing (float): number of seconds spacing between cosmic rays
     cr_removal_time (float): number of seconds to remove around each peak
+    circfit_npoints (int): if not None, limits the number of points in the circle 
+        fit to circfit_npoints around the noise ball
     overwrite (bool): if False, raises an error instead of overwriting files
     verbose (bool): if True, displays a progress bar while analyzing noise
     catch_exceptions (bool): If True, catches any exceptions that occur while
@@ -239,7 +241,12 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
             separate_fit_row(iq_fit_row)
 
         zfine = remove_gain(ffine, zfine, p_amp, p_phase)
-        znoise = remove_gain(fnoise, znoise, p_amp, p_phase)
+        znoise = remove_gain(fnoise, znoise, p_amp, p_phase) 
+
+        if circfit_npoints is not None:
+            ix_mid = np.argmin(np.abs(np.mean(znoise) - zfine)) 
+            ix0, ix1 = ix_mid - circfit_npoints // 2, ix_mid + (circfit_npoints - circfit_npoints // 2) 
+            ffine, zfine = ffine[ix0:ix1], zfine[ix0:ix1]
         try:
             if data_index in fcal_indices:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
@@ -248,7 +255,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             fnoise_offres = fnoise, znoise_offres = znoise,
                             dt_offres = dt, flag_crs = False,
                             deglitch_nstd = deglitch_nstd,
-                            plot_calq = plot_calq_single,
+                            plot_calq = plot_calq_single, 
                             plot_psdq = plot_psdq_single, min_cal_points = min_cal_points,
                             plot_timestreamq = plot_timestreamq_single)
                 if correct_cic2:
@@ -267,7 +274,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             fnoise_offres = None, znoise_offres = None,
                             dt_offres = None, flag_crs = True,
                             deglitch_nstd = deglitch_nstd,
-                            plot_calq = plot_calq_single,
+                            plot_calq = plot_calq_single, 
                             plot_psdq = plot_psdq_single, min_cal_points = min_cal_points,
                             plot_timestreamq = plot_timestreamq_single,
                             cr_nstd = cr_nstd, cr_width = cr_width,
