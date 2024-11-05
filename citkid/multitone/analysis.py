@@ -61,7 +61,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     directory = fix_path(directory)
     # Import data
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
-           fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
+           fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices, fres_noise =\
     import_iq_noise(directory, file_suffix, import_noiseq = False)
     rejected_points = list(rejected_points)
     # Set up output files
@@ -214,7 +214,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     # Import data
     directory = data.iloc[0].dataDirectory
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
-           fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
+           fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices, fres_noise =\
     import_iq_noise(directory, file_suffix0, import_noiseq = False)
     inoise, qnoise = np.load(directory + f'noise{file_suffix}_{noise_index:02d}.npy')
     dt = float(np.load(directory + f'noise{file_suffix}_tsample_{noise_index:02d}.npy'))
@@ -233,7 +233,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         ffine, zfine = ffines[data_index], zfines[data_index]
 
         i, q = inoise[data_index], qnoise[data_index]
-        fnoise = fres[data_index]
+        fnoise = fres_noise[data_index]
         znoise = i + 1j * q
         znoise = znoise[int(tstart / dt):]
 

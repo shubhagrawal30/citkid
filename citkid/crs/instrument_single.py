@@ -129,7 +129,7 @@ class CRS:
 
     async def sweep_sequential(self,  ncos, frequencies, ares, nsamps = 10, verbose = True, 
                                pbar_description = 'Sweeping'):
-        frequencies, ares = np.asarray(frequencies), np.asarray(ares)
+        frequencies, ares = np.asarray(frequencies).copy(), np.asarray(ares).copy()
         self.nco_freq_dict = {key: nco for key, nco in enumerate(ncos)}
         # Split frequencies and ares into dictionaries 
         if not len(self.nco_freq_dict):
@@ -140,20 +140,22 @@ class CRS:
         self.ares_dict = {key: [] for key in range(len(ncos))}
         self.ch_ix_dict = {key: [] for key in range(len(ncos))}
         for ch_ix, freqs, ar in zip(channel_indices, frequencies, ares):
-            nco_index = min(self.nco_freq_dict, key = lambda k: max([np.abs(self.nco_freq_dict[k] - fr) for fr in [max(freqs), min(freqs)]])) 
+            # nco_index = min(self.nco_freq_dict, key = lambda k: max([np.abs(self.nco_freq_dict[k] - fr) for fr in [max(freqs), min(freqs)]])) 
+            nco_index = min(self.nco_freq_dict, key = lambda k: np.abs(self.nco_freq_dict[k] - np.mean(freqs))) 
             self.frequencies_dict[nco_index].append(freqs) 
             self.ares_dict[nco_index].append(ar) 
             self.ch_ix_dict[nco_index].append(ch_ix)
-        self.frequencies_dict = {key: np.array(value) for key, value in self.frequencies_dict.items()}
-        self.ares_dict = {key: np.array(value) for key, value in self.ares_dict.items()}
-        self.ch_ix_dict = {key: np.array(value) for key, value in self.ch_ix_dict.items()}
+        self.frequencies_dict = {key: np.array(value).copy() for key, value in self.frequencies_dict.items()}
+        self.ares_dict = {key: np.array(value).copy() for key, value in self.ares_dict.items()}
+        self.ch_ix_dict = {key: np.array(value).copy() for key, value in self.ch_ix_dict.items()}
         for nco_index in self.nco_freq_dict.keys():
             if any(np.abs(self.frequencies_dict[nco_index] - self.nco_freq_dict[nco_index]).flatten() > 300e6):
                 raise ValueError('All of frequencies must be within 300 MHz of an NCO frequency') 
         
         f, z = np.empty(frequencies.shape, dtype = float), np.empty(frequencies.shape, dtype = complex)
         for nco_index, nco_freq in self.nco_freq_dict.items():
-            await self.set_nco(self.module_index, nco_freq, verbose = False)
+            # await self.set_nco(self.module_index, nco_freq, verbose = False)
+            sleep(1)
             desc = pbar_description + f' NCO {nco_index + 1} / {len(self.nco_freq_dict)}'
             fi, zi = await self.sweep(self.frequencies_dict[nco_index], 
                              self.ares_dict[nco_index], nsamps = nsamps, 
@@ -162,7 +164,56 @@ class CRS:
             for ch_ix, fii, zii in zip(self.ch_ix_dict[nco_index], fi, zi):
                 f[ch_ix] = fii 
                 z[ch_ix] = zii
-        return f, z 
+        return f, z
+    
+    # async def sweep_sequential(self,  ncos, frequencies, ares, nsamps = 10, verbose = True, 
+    #                            pbar_description = 'Sweeping'):
+    #     frequencies, ares = np.asarray(frequencies).copy(), np.asarray(ares).copy()
+    #     self.nco_freq_dict = {key: nco for key, nco in enumerate(ncos)}
+    #     # Split frequencies and ares into dictionaries 
+    #     if not len(self.nco_freq_dict):
+    #         raise Exception("NCO frequencies are not set")  
+
+    #     channel_indices = list(range(len(frequencies))) 
+    #     self.frequencies_dict = {key: [] for key in range(len(ncos))}
+    #     self.ares_dict = {key: [] for key in range(len(ncos))}
+    #     self.ch_ix_dict = {key: [] for key in range(len(ncos))}
+    #     for ch_ix, freqs, ar in zip(channel_indices, frequencies, ares):
+    #         # nco_index = min(self.nco_freq_dict, key = lambda k: max([np.abs(self.nco_freq_dict[k] - fr) for fr in [max(freqs), min(freqs)]])) 
+    #         nco_index = min(self.nco_freq_dict, key = lambda k: np.abs(self.nco_freq_dict[k] - np.mean(freqs))) 
+    #         self.frequencies_dict[nco_index].append(freqs) 
+    #         self.ares_dict[nco_index].append(ar) 
+    #         self.ch_ix_dict[nco_index].append(ch_ix)
+    #     self.frequencies_dict = {key: np.array(value).copy() for key, value in self.frequencies_dict.items()}
+    #     self.ares_dict = {key: np.array(value).copy() for key, value in self.ares_dict.items()}
+    #     self.ch_ix_dict = {key: np.array(value).copy() for key, value in self.ch_ix_dict.items()}
+    #     for nco_index in self.nco_freq_dict.keys():
+    #         if any(np.abs(self.frequencies_dict[nco_index] - self.nco_freq_dict[nco_index]).flatten() > 300e6):
+    #             raise ValueError('All of frequencies must be within 300 MHz of an NCO frequency') 
+        
+    #     f, z = np.empty(frequencies.shape, dtype = float), np.empty(frequencies.shape, dtype = complex)
+    #     nco_index = 0 
+    #     nco_freq = ncos[0]
+    #     await self.set_nco(self.module_index, nco_freq, verbose = False)
+    #     sleep(1)
+    #     desc = pbar_description + f' NCO {nco_index + 1} / {len(self.nco_freq_dict)}'
+    #     fi, zi = await self.sweep(frequencies, 
+    #                         ares, nsamps = nsamps, 
+    #                     verbose = verbose, pbar_description = desc,
+    #                     return_raw = False)
+    #     f, z = fi, zi
+    #     # for nco_index, nco_freq in self.nco_freq_dict.items():
+    #     #     await self.set_nco(self.module_index, nco_freq, verbose = False)
+    #     #     sleep(1)
+    #     #     desc = pbar_description + f' NCO {nco_index + 1} / {len(self.nco_freq_dict)}'
+    #     #     fi, zi = await self.sweep(self.frequencies_dict[nco_index], 
+    #     #                      self.ares_dict[nco_index], nsamps = nsamps, 
+    #     #                     verbose = verbose, pbar_description = desc,
+    #     #                     return_raw = False)
+    #     #     for ch_ix, fii, zii in zip(self.ch_ix_dict[nco_index], fi, zi):
+    #     #         f[ch_ix] = fii 
+    #     #         z[ch_ix] = zii
+    #     return f, z
 
     async def sweep(self, frequencies, ares, nsamps = 10, verbose = True, pbar_description = 'Sweeping',
                     return_raw = False, nstd_thresh = 1):
@@ -182,7 +233,7 @@ class CRS:
         z (M X N array-like complex): complex S21 data in V for each frequency in f 
 
         """
-        frequencies, ares = np.asarray(frequencies), np.asarray(ares)
+        frequencies, ares = np.asarray(frequencies).copy(), np.asarray(ares).copy()
         # Randomize frequencies a little
         frequencies += np.random.uniform(-50, 50, frequencies.shape)
         comb_sampling_freq = transferfunctions.get_comb_sampling_freq()
@@ -242,14 +293,14 @@ class CRS:
             zical = np.mean(zical[:n_channels, :], axis = 1)
             # adjust for loopback calibration
             zcal[:, sweep_index] = zical 
-            zraw[:, sweep_index] = zi 
+            zraw[:, sweep_index] = zi * self.volts_per_roc 
             zi = remove_internal_phaseshift(frequencies[:, sweep_index], zi, zical) 
             z[:, sweep_index] = zi * self.volts_per_roc 
         # Turn off channels 
         await self.d.clear_channels(module = self.module_index)
         z /= 10 ** (ares[:, np.newaxis] / 20)
         if return_raw:
-            return z, zcal, zraw 
+            return frequencies, z, zcal, zraw 
         return frequencies, z
     
     async def sweep_linear(self, fres, ares, bw = 20e3, npoints = 10, 
@@ -338,7 +389,7 @@ class CRS:
                             parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
                             interface='enp2s0', delete_parser_data = False,
                             verbose = True):
-        fres, ares = np.asarray(fres), np.asarray(ares)
+        fres, ares = np.asarray(fres).copy(), np.asarray(ares).copy()
         self.nco_freq_dict = {key: nco for key, nco in enumerate(self.ncos)}
         # Split frequencies and ares into dictionaries 
         if not len(self.nco_freq_dict):
@@ -429,7 +480,7 @@ class CRS:
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, self.module_index)
         np.save('tmp/zcal.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
         sleep(0.1)
-        # Collect th data 
+        # Collect the data 
         num_samps = int(self.sample_frequency*(noise_time + 10))
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
                                    f'{self.crs_sn:04d}', '-m', str(self.module_index), '-n', str(num_samps)], 

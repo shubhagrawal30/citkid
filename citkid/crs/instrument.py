@@ -551,7 +551,7 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, swe
             zical = np.mean(zical[:n_channels, nsamples_discard:], axis = 1)
             # adjust for loopback calibration
             zcal[:, sweep_index] = zical 
-            zraw[:, sweep_index] = zi 
+            zraw[:, sweep_index] = zi * d.volts_per_roc 
             zi = remove_internal_phaseshift(frequencies[:, sweep_index], zi, zical) 
             z[:, sweep_index] = zi * d.volts_per_roc 
         # Turn off channels 

@@ -13,7 +13,7 @@ from ..multitone.data_io import import_iq_noise
 from ..noise.analysis import compute_psd_simple
 
 async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
-                  noise_time = 200, take_noise = False, gain_span_factor = 10,
+                  noise_time = 200, take_noise = False, gain_span_factor = 10, npoints_noisefreq_update = None,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
                   take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
                   fres_all = None, qres_all = None, verbose = True, cable_delay = 0,
@@ -36,6 +36,8 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
         in the IQ loops
     fine_bw (float): fine sweep bandwidth in Hz. Gain bandwidth is 10 X fine
         bandwidth
+    npoints_noisefreq_update (int): Number of points around the center of the fine sweep that 
+        are used to update frequencies before taking noise, or None to bypass updating
     rough_bw (float): rough sweep bandwidth in Hz
     npoints_fine (int): number of points per resonator in the fine sweep
     npoints_gain (int): number of points per resonator in the gain sweep
@@ -101,6 +103,12 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
     f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_fine, nsamps = nsamps,
                                    verbose = verbose, pbar_description = 'Fine sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
+    if npoints_noisefreq_update is not None:
+        ix0, ix1 = npoints_fine // 2 - npoints_noisefreq_update // 2, npoints_fine // 2 + npoints_noisefreq_update // 2 + npoints_noisefreq_update % 2
+        f0 = [fi[270:330] for fi in f] 
+        z0 = [zi[270:330] for zi in z]
+        fres = update_fres(f0, z0, fres, spans, fcal_indices, method = 'spacing', cable_delay = cable_delay)
+    np.save(out_directory + f'fres_noise{file_suffix}.npy', fres) 
 
     # Noise
     if take_noise:
@@ -124,6 +132,64 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
                 filename = f'noise_fast{file_suffix}_DI{data_index:04d}NI{noise_index:02d}.npy'
                 fraw, z = await inst.capture_fast_noise(frequency, amplitude, fast_noise_time, verbose = False)
                 np.save(out_directory + filename, [fraw, np.real(z), np.imag(z)])
+
+
+async def take_iq_noise_sequential(inst, ncos, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
+                  noise_time = 200, take_noise = False, gain_span_factor = 10, npoints_noisefreq_update = None,
+                  npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
+                  take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
+                  fres_all = None, qres_all = None, verbose = True, cable_delay = 0,
+                  take_fast_noise = False, fast_noise_time = 10, n_fast_noise = 1):
+    """
+    Takes multitone IQ sweeps and noise.
+
+    Parameters:
+    inst (multitone instrument): initialized multitone instrument class, with
+        'sweep', 'write_tones', and 'capture_noise' methods
+    ncos (array-like): nco frequencies in Hz 
+    fres (np.array): array of resonance frequencies in Hz
+    ares (np.array): array of amplitudes in RFSoC units
+    qres (np.array): array of span factors for cutting out of adjacent datasets.
+        Resonances should span fres / qres
+    fcal_indices (np.array): indices (into fres, ares, qres) of calibration tones
+    out_directory (str): directory to save the data
+    file_suffix (str): suffix for file names
+    noise_time (float or None): noise timestream length in seconds
+    if_bw (float): IF bandwidth. 1 / if_bw is the averaging time per data point
+        in the IQ loops
+    fine_bw (float): fine sweep bandwidth in Hz. Gain bandwidth is 10 X fine
+        bandwidth
+    npoints_noisefreq_update (int): Number of points around the center of the fine sweep that 
+        are used to update frequencies before taking noise, or None to bypass updating
+    rough_bw (float): rough sweep bandwidth in Hz
+    npoints_fine (int): number of points per resonator in the fine sweep
+    npoints_gain (int): number of points per resonator in the gain sweep
+    npoints_rough (int): number of points per resonator in the rough sweep
+    take_rough_sweep (bool): if True, first takes a rough sweep and optimizes
+        the tone frequencies
+    fres_update_method (str): method for updating the tone frequencies, if
+        take_rough_sweep is True. See .fres.update_fres for methods
+    nnoise_timestreams (int): number of noise timestreams to take sequentially.
+        Set to 0 to bypass noise acquisition
+    fir_stage (int): fir_stage frequency downsampling factor.
+            6 ->   596.05 Hz
+            5 -> 1,192.09 Hz
+            4 -> 2,384.19 Hz, might crash
+            3 -> will definetely crash
+    fres_all (array-like): list of all frequencies for analysis, if fres is
+        incomplete
+    qres_all (array-like): array of span factors corresponding to fres_all
+    """ 
+    for nco_index, nco in enumerate(ncos):
+        file_suffix0 = file_suffix + f'_NCO{nco_index}'
+        
+        take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
+                  noise_time = 200, take_noise = False, gain_span_factor = 10, npoints_noisefreq_update = None,
+                  npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
+                  take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
+                  fres_all = None, qres_all = None, verbose = True, cable_delay = 0,
+                  take_fast_noise = False, fast_noise_time = 10, n_fast_noise = 1)
+
 
 async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,
                            file_suffix, npoints = 600, nsamps = 10, plot_directory = '',
