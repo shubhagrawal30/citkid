@@ -105,8 +105,8 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
     if npoints_noisefreq_update is not None:
         ix0, ix1 = npoints_fine // 2 - npoints_noisefreq_update // 2, npoints_fine // 2 + npoints_noisefreq_update // 2 + npoints_noisefreq_update % 2
-        f0 = [fi[270:330] for fi in f] 
-        z0 = [zi[270:330] for zi in z]
+        f0 = [fi[ix0: ix1] for fi in f] 
+        z0 = [zi[ix0: ix1] for zi in z]
         fres = update_fres(f0, z0, fres, spans, fcal_indices, method = 'spacing', cable_delay = cable_delay)
     np.save(out_directory + f'fres_noise{file_suffix}.npy', fres) 
 
@@ -134,7 +134,8 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
                 np.save(out_directory + filename, [fraw, np.real(z), np.imag(z)])
 
 
-async def take_iq_noise_sequential(inst, ncos, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
+async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, fcal_indices, res_indices, 
+                                   out_directory, file_suffix,
                   noise_time = 200, take_noise = False, gain_span_factor = 10, npoints_noisefreq_update = None,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
                   take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
@@ -180,15 +181,119 @@ async def take_iq_noise_sequential(inst, ncos, fres, ares, qres, fcal_indices, r
         incomplete
     qres_all (array-like): array of span factors corresponding to fres_all
     """ 
-    for nco_index, nco in enumerate(ncos):
+    if take_fast_noise:
+        raise Exception('Fast noise not yet implemented for sequential')
+    ix = np.argsort(fres) 
+    fres, ares, qres = fres[ix], ares[ix], qres[ix] 
+    res_indices = res_indices[ix] 
+    fcal_indices = ix[fcal_indices]
+    ncos = np.asarray(ncos)
+    ixs = {index: [] for index in range(len(ncos))}
+    for di, fr in enumerate(fres):
+        nco_index = np.argmin(abs(ncos - fr))
+        ixs[nco_index].append(di)
+
+    fres_initial_out, fres_out = np.empty(fres.size, dtype = float), np.empty(fres.size, dtype = float)
+    ares_out, qres_out = np.empty(fres.size, dtype = float), np.empty(fres.size, dtype = float) 
+    fcal_indices_out = fcal_indices.copy() 
+    res_indices_out = np.empty(fres.size, dtype = float) 
+    if take_rough_sweep:
+        frough_out, zrough_out = np.empty((len(fres), npoints_rough), dtype = float), np.empty((len(fres), npoints_rough), dtype = complex)
+    else:
+        frough_out, zrough_out = None, None 
+    ffine_out, zfine_out = np.empty((len(fres), npoints_fine), dtype = float), np.empty((len(fres), npoints_fine), dtype = complex)
+    fgain_out, zgain_out = np.empty((len(fres), npoints_gain), dtype = float), np.empty((len(fres), npoints_gain), dtype = complex)
+    fcal_indices_all = []
+    if take_noise:
+        fres_noise_out = np.empty(len(fres), dtype = float) 
+        znoise_out = None 
+    pbar = ncos 
+    if verbose:
+        pbar = tqdm(pbar, leave = False)
+    for nco_index, nco in enumerate(pbar):
+        if verbose:
+            pbar.set_description(f'NCO: {round(nco * 1e-6, 4)} MHz')
         file_suffix0 = file_suffix + f'_NCO{nco_index}'
+        ix = ixs[nco_index]
+        fres0 = fres[ix] 
+        qres0 = qres[ix] 
+        ares0 = ares[ix] 
+        fcal_indices0 = [fc - min(ix) for fc in fcal_indices if fc in ix] 
+        res_indices0 = res_indices[ix] 
+        await inst.set_nco({module_index: nco})
+        await take_iq_noise(inst, fres0, ares0, qres0, fcal_indices0, res_indices0, out_directory, file_suffix0,
+                noise_time = noise_time, take_noise = take_noise, gain_span_factor = gain_span_factor, 
+                npoints_noisefreq_update = npoints_noisefreq_update, cable_delay = cable_delay,
+                npoints_fine = npoints_fine, npoints_gain = npoints_gain, npoints_rough = npoints_rough, 
+                nsamps = nsamps, take_rough_sweep = take_rough_sweep, fres_update_method = fres_update_method, 
+                fir_stage = fir_stage, fres_all = fres_all, qres_all = qres_all, verbose = verbose, 
+                take_fast_noise = take_fast_noise, fast_noise_time = fast_noise_time, n_fast_noise = n_fast_noise)
         
-        take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
-                  noise_time = 200, take_noise = False, gain_span_factor = 10, npoints_noisefreq_update = None,
-                  npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
-                  take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
-                  fres_all = None, qres_all = None, verbose = True, cable_delay = 0,
-                  take_fast_noise = False, fast_noise_time = 10, n_fast_noise = 1)
+        fres_initial0, fres_out[ix], ares_out[ix], qres_out[ix], fcal_indices0, fres_all0, qres_all0, \
+            frough0, zrough0, fgain_out[ix], zgain_out[ix], ffine_out[ix], \
+            zfine_out[ix], znoise0, noise_dt, res_indices_out[ix], fres_noise0 =\
+        import_iq_noise(out_directory, file_suffix0, import_noiseq = take_noise) 
+        fcal_indices_all.append([fc + min(ix) for fc in fcal_indices0])
+        if take_rough_sweep:
+            fres_initial_out[ix] = fres_initial0
+            frough_out[ix] = frough0 
+            zrough_out[ix] = zrough0 
+        if take_noise:
+            fres_noise_out[ix] = fres_noise0
+            if znoise_out is None:
+                znoise_out = np.empty((len(fres), znoise0.shape[1]), dtype = complex)
+            elif znoise_out.shape[1] < znoise0.shape[1]:
+                znoise0 = znoise0[:, :znoise_out.shape[1]] 
+            elif znoise_out.shape[1] > znoise0.shape[1]:
+                znoise_out = znoise_out[:, :znoise0.shape[1]] 
+            znoise_out[ix] = znoise0
+    if take_rough_sweep:
+        np.save(out_directory + f's21_rough_{file_suffix}.npy', 
+                [frough_out, np.real(zrough_out), np.imag(zrough_out)]) 
+        np.save(out_directory + f'fres_initial_{file_suffix}.npy', fres_initial_out)
+
+    np.save(out_directory + f's21_fine_{file_suffix}.npy', 
+                [ffine_out, np.real(zfine_out), np.imag(zfine_out)])
+    np.save(out_directory + f's21_gain_{file_suffix}.npy', 
+                [fgain_out, np.real(zgain_out), np.imag(zgain_out)]) 
+
+    if take_rough_sweep:
+        np.save(out_directory + f's21_rough_{file_suffix}.npy', 
+                [frough_out, np.real(zrough_out), np.imag(zrough_out)]) 
+        np.save(out_directory + f'fres_initial_{file_suffix}.npy', fres_initial_out)
+
+    np.save(out_directory + f's21_fine_{file_suffix}.npy', 
+                [ffine_out, np.real(zfine_out), np.imag(zfine_out)])
+    np.save(out_directory + f's21_gain_{file_suffix}.npy', 
+                [fgain_out, np.real(zgain_out), np.imag(zgain_out)]) 
+
+    np.save(out_directory + f'fres_{file_suffix}.npy', fres_out)
+    np.save(out_directory + f'qres_{file_suffix}.npy', qres_out)
+    np.save(out_directory + f'ares_{file_suffix}.npy', ares_out)
+    np.save(out_directory + f'fres_all_{file_suffix}.npy', fres_all)
+    np.save(out_directory + f'qres_all_{file_suffix}.npy', qres_all)
+    np.save(out_directory + f'fcal_indices_{file_suffix}.npy', np.vectorize(int)(fcal_indices_out) )
+    np.save(out_directory + f'res_indices_{file_suffix}.npy', np.vectorize(int)(res_indices_out))
+
+    if take_noise:
+        np.save(out_directory + f'noise_{file_suffix}_00.npy', [np.real(znoise_out), np.imag(znoise_out)])
+        np.save(out_directory + f'noise_{file_suffix}_00_tsample.npy', noise_dt)
+
+    for nco_index in range(len(ncos)):
+        prefixes = ['fres', 'qres', 'ares', 'fres_all', 'qres_all', 'fcal_indices', 'res_indices',
+                    's21_fine', 's21_gain'] 
+        if take_rough_sweep:
+            prefixes += ['s21_rough', 'fres_initial']
+        paths = [out_directory + prefix + f'_{file_suffix}_NCO{nco_index}.npy' for prefix in prefixes] 
+        if take_noise:
+            paths.append(out_directory + f'fres_noise_{file_suffix}_NCO{nco_index}.npy')
+            paths.append(out_directory + f'noise_{file_suffix}_NCO{nco_index}_00.npy')
+            paths.append(out_directory + f'noise_{file_suffix}_NCO{nco_index}_tsample_00.npy')
+        for path in paths:
+            os.remove(path)
+
+        
+
 
 
 async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,

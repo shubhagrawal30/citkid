@@ -22,8 +22,7 @@ from hidfmux.analysis.noise_processing import separate_iq_fft_to_i_and_q
 
 class CRS:
     def __init__(self, crs_sn = 27): 
-        """ 
-        Initializes the crs object d. Not that the system must be 
+        """ srs object d. Not that the system must be 
         configured using CRS.configure_system before measurements 
 
         Parameters:
@@ -89,7 +88,13 @@ class CRS:
         await self.d.set_nco_frequency(nco_freq, self.d.UNITS.HZ, module = module_index)
         self.nco_freq = await self.d.get_nco_frequency(self.d.UNITS.HZ, module=module_index)
         if verbose:
-            print(f'NCO is {self.nco_freq}')
+            print(f'NCO is {self.nco_freq}') 
+
+        self.theta_offset = 0
+        f, z = await self.sweep([[nco_freq - 150e6], [nco_freq], [nco_freq + 150e6]], 
+                                [-55, -55, -55], nsamps = 1000, verbose = False)
+        self.theta_offset = np.mean(np.angle(z))
+        
             
     async def write_tones(self, fres, ares):
         """
@@ -154,7 +159,7 @@ class CRS:
         
         f, z = np.empty(frequencies.shape, dtype = float), np.empty(frequencies.shape, dtype = complex)
         for nco_index, nco_freq in self.nco_freq_dict.items():
-            # await self.set_nco(self.module_index, nco_freq, verbose = False)
+            await self.set_nco(self.module_index, nco_freq, verbose = False)
             sleep(1)
             desc = pbar_description + f' NCO {nco_index + 1} / {len(self.nco_freq_dict)}'
             fi, zi = await self.sweep(self.frequencies_dict[nco_index], 
@@ -202,17 +207,17 @@ class CRS:
     #                     verbose = verbose, pbar_description = desc,
     #                     return_raw = False)
     #     f, z = fi, zi
-    #     # for nco_index, nco_freq in self.nco_freq_dict.items():
-    #     #     await self.set_nco(self.module_index, nco_freq, verbose = False)
-    #     #     sleep(1)
-    #     #     desc = pbar_description + f' NCO {nco_index + 1} / {len(self.nco_freq_dict)}'
-    #     #     fi, zi = await self.sweep(self.frequencies_dict[nco_index], 
-    #     #                      self.ares_dict[nco_index], nsamps = nsamps, 
-    #     #                     verbose = verbose, pbar_description = desc,
-    #     #                     return_raw = False)
-    #     #     for ch_ix, fii, zii in zip(self.ch_ix_dict[nco_index], fi, zi):
-    #     #         f[ch_ix] = fii 
-    #     #         z[ch_ix] = zii
+    #     for nco_index, nco_freq in self.nco_freq_dict.items():
+    #         await self.set_nco(self.module_index, nco_freq, verbose = False)
+    #         sleep(1)
+    #         desc = pbar_description + f' NCO {nco_index + 1} / {len(self.nco_freq_dict)}'
+    #         fi, zi = await self.sweep(self.frequencies_dict[nco_index], 
+    #                          self.ares_dict[nco_index], nsamps = nsamps, 
+    #                         verbose = verbose, pbar_description = desc,
+    #                         return_raw = False)
+    #         for ch_ix, fii, zii in zip(self.ch_ix_dict[nco_index], fi, zi):
+    #             f[ch_ix] = fii 
+    #             z[ch_ix] = zii
     #     return f, z
 
     async def sweep(self, frequencies, ares, nsamps = 10, verbose = True, pbar_description = 'Sweeping',
@@ -299,6 +304,7 @@ class CRS:
         # Turn off channels 
         await self.d.clear_channels(module = self.module_index)
         z /= 10 ** (ares[:, np.newaxis] / 20)
+        z *= np.exp(1j * self.theta_offset)
         if return_raw:
             return frequencies, z, zcal, zraw 
         return frequencies, z
@@ -430,6 +436,7 @@ class CRS:
                 z = z[:, :len_diff]
             for ch_ix, zii in zip(self.ch_ix_dict[nco_index], zi):
                 z[ch_ix] = zii
+        z *= np.exp(1j * self.theta_offset)
         return z
         
 
