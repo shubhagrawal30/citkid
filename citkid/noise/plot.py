@@ -5,7 +5,7 @@ from .psd import bin_psd
 from ..util import combine_figures_horizontally
 
 def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
-             theta_range, theta_fine, theta, poly):
+             theta_range, theta_fine, theta, poly, ixs):
     """
     Plot theta and x calibration. Left plot is the IQ loop with noise, and right
     plot is the theta to x calibration, if on-resonance noise is provided.
@@ -27,6 +27,7 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
     Returns:
     fig (plt.figure): calibration plot figure
     """
+     
     color0 = plt.cm.viridis(0)
     color1 = plt.cm.viridis(0.9)
     fig, ax = plot_circle(zfine, *popt_circle)
@@ -35,6 +36,7 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
     ax.plot([], [], '-k', label = 'fit')
 
     if znoise is not None:
+        ix0, ix1 = ixs
         fig2, ax2 = plt.subplots(figsize = [4, 4], dpi = 200)
         ax2.set_ylabel('x (Hz / MHz)')
         ax2.set_xlabel('Phase')
@@ -51,22 +53,22 @@ def plot_cal(ffine, zfine, popt_circle, fnoise, znoise, znoise_offres,
         ax.plot([np.real(origin), np.real(r2)],
                 [np.imag(origin), np.imag(r2)], '--', color = color0)
         # theta -> x calibration
-        ix = np.argsort(theta_fine)
-        theta_fine, ffine = theta_fine[ix], ffine[ix]
-        ix0 = np.where(theta_fine > min(theta))[0]
-        if len(ix0):
-            ix0 = min(ix0) - 3
-            if ix0 < 0:
-                ix0 = 0
-        else:
-            ix0 = 0
-        ix1 = np.where(theta_fine < max(theta))[0]
-        if len(ix1):
-            ix1 = max(ix1) + 3
-            if ix1 > len(theta_fine):
-                ix1 = len(theta_fine)
-        else:
-            ix1 = len(theta_fine)
+        # ix = np.argsort(theta_fine)
+        # theta_fine, ffine = theta_fine[ix], ffine[ix]
+        # ix0 = np.where(theta_fine > min(theta))[0]
+        # if len(ix0):
+        #     ix0 = min(ix0) - 3
+        #     if ix0 < 0:
+        #         ix0 = 0
+        # else:
+        #     ix0 = 0
+        # ix1 = np.where(theta_fine < max(theta))[0]
+        # if len(ix1):
+        #     ix1 = max(ix1) + 3
+        #     if ix1 > len(theta_fine):
+        #         ix1 = len(theta_fine)
+        # else:
+        #     ix1 = len(theta_fine)
         theta_samp = np.linspace(min(theta_fine[ix0:ix1]), max(theta_fine[ix0:ix1]), 200)
         ax2.plot(theta_samp, (1 - np.polyval(poly, theta_samp) / fnoise) * 1e6,
                  '-k')

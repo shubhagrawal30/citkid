@@ -84,7 +84,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     # Extract theta and x
     if znoise_offres is not None:
         znoise_offres = np.array(znoise_offres)
-        theta_fine, theta_offres, theta_offres_clean, A_offres_clean =\
+        theta_fine, theta_offres, theta_offres_clean, A_offres_clean, (ix0, ix1) =\
         calibrate_timestreams(origin, ffine, zfine, fnoise_offres,
                               znoise_offres, dt_offres, deglitch_nstd,
                               flag_crs = False, offres = True, min_cal_points = min_cal_points)
@@ -98,7 +98,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     if znoise is not None:
         znoise = np.array(znoise)
 
-        theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices =\
+        theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices, (ix0, ix1) =\
         calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
                               deglitch_nstd, flag_crs = flag_crs, offres = False,
                               min_cal_points = min_cal_points,
@@ -116,7 +116,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     if plot_calq:
         fig_cal = plot_cal(ffine, zfine, popt_circle, fnoise, znoise,
                            znoise_offres, theta_range, theta_fine, theta_clean,
-                           poly)
+                           poly, (ix0, ix1))
     else:
         fig_cal = None
     if plot_timestreamq:
@@ -251,12 +251,12 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
     else:
         theta_clean = theta.copy()
     # Calibrate x
-    poly, theta_range = \
+    poly, theta_range, (ix0, ix1) = \
         calibrate_x(ffine, theta_fine, theta_clean, min_cal_points = min_cal_points)
 
     fs_clean = np.polyval(poly, theta_clean)
     x = 1 - fs_clean / fnoise
-    return theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices
+    return theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices, (ix0, ix1)
 
 def calibrate_x(ffine, theta_fine, theta_clean, poly_deg = 3,
                 min_cal_points = 5):
@@ -302,7 +302,7 @@ def calibrate_x(ffine, theta_fine, theta_clean, poly_deg = 3,
                       deg = poly_deg)
     theta_range = np.array([theta_fine[ix0], theta_fine[ix1 - 1]])
 
-    return poly, theta_range
+    return poly, theta_range, (ix0, ix1)
 
 def deglitch_timestream(x, deglitch_nstd):
     """

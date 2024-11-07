@@ -196,13 +196,14 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
     fres_initial_out, fres_out = np.empty(fres.size, dtype = float), np.empty(fres.size, dtype = float)
     ares_out, qres_out = np.empty(fres.size, dtype = float), np.empty(fres.size, dtype = float) 
     fcal_indices_out = fcal_indices.copy() 
-    res_indices_out = np.empty(fres.size, dtype = float) 
+    res_indices_out = np.empty(fres.size, dtype = int) 
     if take_rough_sweep:
         frough_out, zrough_out = np.empty((len(fres), npoints_rough), dtype = float), np.empty((len(fres), npoints_rough), dtype = complex)
     else:
         frough_out, zrough_out = None, None 
     ffine_out, zfine_out = np.empty((len(fres), npoints_fine), dtype = float), np.empty((len(fres), npoints_fine), dtype = complex)
     fgain_out, zgain_out = np.empty((len(fres), npoints_gain), dtype = float), np.empty((len(fres), npoints_gain), dtype = complex)
+    nco_indices_out = np.empty(len(fres), dtype = int)
     fcal_indices_all = []
     if take_noise:
         fres_noise_out = np.empty(len(fres), dtype = float) 
@@ -215,6 +216,8 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
             pbar.set_description(f'NCO: {round(nco * 1e-6, 4)} MHz')
         file_suffix0 = file_suffix + f'_NCO{nco_index}'
         ix = ixs[nco_index]
+        for di in ix:
+            nco_indices_out[di] = nco_index
         fres0 = fres[ix] 
         qres0 = qres[ix] 
         ares0 = ares[ix] 
@@ -251,7 +254,7 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
         np.save(out_directory + f's21_rough_{file_suffix}.npy', 
                 [frough_out, np.real(zrough_out), np.imag(zrough_out)]) 
         np.save(out_directory + f'fres_initial_{file_suffix}.npy', fres_initial_out)
-
+    np.save(out_directory + f'NCO_indices_{file_suffix}.npy', nco_indices_out)
     np.save(out_directory + f's21_fine_{file_suffix}.npy', 
                 [ffine_out, np.real(zfine_out), np.imag(zfine_out)])
     np.save(out_directory + f's21_gain_{file_suffix}.npy', 
@@ -272,12 +275,13 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
     np.save(out_directory + f'ares_{file_suffix}.npy', ares_out)
     np.save(out_directory + f'fres_all_{file_suffix}.npy', fres_all)
     np.save(out_directory + f'qres_all_{file_suffix}.npy', qres_all)
-    np.save(out_directory + f'fcal_indices_{file_suffix}.npy', np.vectorize(int)(fcal_indices_out) )
+    np.save(out_directory + f'fcal_indices_{file_suffix}.npy', np.vectorize(int)(fcal_indices_out))
     np.save(out_directory + f'res_indices_{file_suffix}.npy', np.vectorize(int)(res_indices_out))
 
     if take_noise:
         np.save(out_directory + f'noise_{file_suffix}_00.npy', [np.real(znoise_out), np.imag(znoise_out)])
-        np.save(out_directory + f'noise_{file_suffix}_00_tsample.npy', noise_dt)
+        np.save(out_directory + f'noise_{file_suffix}_tsample_00.npy', noise_dt)
+        np.save(out_directory + f'fres_noise_{file_suffix}.npy', fres_noise_out)
 
     for nco_index in range(len(ncos)):
         prefixes = ['fres', 'qres', 'ares', 'fres_all', 'qres_all', 'fcal_indices', 'res_indices',
