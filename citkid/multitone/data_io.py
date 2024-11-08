@@ -33,7 +33,6 @@ def import_iq_noise(directory, file_suffix, noise_index = 0, import_noiseq = Tru
     else:
         fres_initial = None
     fres = np.load(directory + f'fres{file_suffix}.npy')
-    fres_noise = np.load(directory + f'fres_noise{file_suffix}.npy')
     ares = np.load(directory + f'ares{file_suffix}.npy')
     qres = np.load(directory + f'qres{file_suffix}.npy')
     fcal_indices = np.load(directory + f'fcal_indices{file_suffix}.npy')
@@ -67,8 +66,10 @@ def import_iq_noise(directory, file_suffix, noise_index = 0, import_noiseq = Tru
         noise_dt = float(np.load(directory + f'noise{file_suffix}_tsample_{noise_index:02d}.npy'))
         inoise, qnoise = np.load(path)
         znoises = inoise + 1j * qnoise
+        fres_noise = np.load(directory + f'fres_noise{file_suffix}.npy')
     else:
         noise_dt = None
         znoises = None 
+        fres_noise = None
     return fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgain, zgain, ffine, zfine, znoises, noise_dt, res_indices, fres_noise
