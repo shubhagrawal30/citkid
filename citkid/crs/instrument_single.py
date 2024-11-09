@@ -492,7 +492,7 @@ class CRS:
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
                                    f'{self.crs_sn:04d}', '-m', str(self.module_index), '-n', str(num_samps)], 
                                    shell=False)
-        pbar = list(range(int(noise_time) + 10))
+        pbar = list(range(int(noise_time * 1.5)))
         if verbose:
             pbar = tqdm(pbar, leave = False)
         for i in pbar:
