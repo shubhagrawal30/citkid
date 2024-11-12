@@ -109,13 +109,13 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
         p0 = guess.guess_p0_nonlinear_iq(f, z)
     if bounds is None:
         # default bounds. Phi range is increased to avoid jumping at bounds
-        #                 fr,  Qr, amp,    phi,    a,   i0,   q0,     tau
+        #                 fr,  Qr, amp,              phi,    a,   i0,   q0,     tau
         bounds = ([np.min(f), 1e3, .01,        -np.pi * 1.5, 0, -1e2, -1e2, -1.0e-6],
-                  [np.max(f), 1e7,   1 - 1e-5,  np.pi * 1.5, 2,  1e2,  1e2,  1.0e-6])
+                  [np.max(f), 1e7,   1 - 1e-6,  np.pi * 1.5, 2,  1e2,  1e2,  1.0e-6])
     for index in [1, 5, 6]: # For Qr and z0, the initial guess should be good
         # These will be flipped in bounds_check if needed
         bounds[0][index] = p0[index] / 10
-        bounds[1][index] = p0[index] * 10
+        bounds[1][index] = p0[index] * 10  
     if fr_guess is not None:
         p0[0] = fr_guess
     if tau_guess is not None:
@@ -124,6 +124,8 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     z_stacked = np.hstack((np.real(z), np.imag(z)))
     # Check bounds
     bounds = bounds_check(p0, bounds)
+    if bounds[1][2] > 1 - 1e-6:
+        bounds[1][2] = 1 - 1e-6
     # fit
     res_acceptable = False
     niter = 0
