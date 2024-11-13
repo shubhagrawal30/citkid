@@ -140,7 +140,7 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
                   take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
                   fres_all = None, qres_all = None, verbose = True, cable_delay = 0,
-                  take_fast_noise = False, fast_noise_time = 10, n_fast_noise = 1):
+                  take_fast_noise = False, fast_noise_time = 10, n_fast_noise = 1, nco_indices_to_skip = []):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -180,6 +180,10 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
     fres_all (array-like): list of all frequencies for analysis, if fres is
         incomplete
     qres_all (array-like): array of span factors corresponding to fres_all
+    nco_indices_to_skip (list): list of NCO indices to skip data acquisition. Use this when 
+        the code failed partway through. take_iq_noise must have finished running for the 
+        indices that are skipped. The function will import the data instead of taking and
+        overwriting it
     """ 
     if take_fast_noise:
         raise Exception('Fast noise not yet implemented for sequential')
@@ -224,13 +228,14 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
         fcal_indices0 = [fc - min(ix) for fc in fcal_indices if fc in ix] 
         res_indices0 = res_indices[ix] 
         await inst.set_nco({module_index: nco})
-        await take_iq_noise(inst, fres0, ares0, qres0, fcal_indices0, res_indices0, out_directory, file_suffix0,
-                noise_time = noise_time, take_noise = take_noise, gain_span_factor = gain_span_factor, 
-                npoints_noisefreq_update = npoints_noisefreq_update, cable_delay = cable_delay,
-                npoints_fine = npoints_fine, npoints_gain = npoints_gain, npoints_rough = npoints_rough, 
-                nsamps = nsamps, take_rough_sweep = take_rough_sweep, fres_update_method = fres_update_method, 
-                fir_stage = fir_stage, fres_all = fres_all, qres_all = qres_all, verbose = verbose, 
-                take_fast_noise = take_fast_noise, fast_noise_time = fast_noise_time, n_fast_noise = n_fast_noise)
+        if nco_index not in nco_indices_to_skip:
+            await take_iq_noise(inst, fres0, ares0, qres0, fcal_indices0, res_indices0, out_directory, file_suffix0,
+                    noise_time = noise_time, take_noise = take_noise, gain_span_factor = gain_span_factor, 
+                    npoints_noisefreq_update = npoints_noisefreq_update, cable_delay = cable_delay,
+                    npoints_fine = npoints_fine, npoints_gain = npoints_gain, npoints_rough = npoints_rough, 
+                    nsamps = nsamps, take_rough_sweep = take_rough_sweep, fres_update_method = fres_update_method, 
+                    fir_stage = fir_stage, fres_all = fres_all, qres_all = qres_all, verbose = verbose, 
+                    take_fast_noise = take_fast_noise, fast_noise_time = fast_noise_time, n_fast_noise = n_fast_noise)
         
         fres_initial0, fres_out[ix], ares_out[ix], qres_out[ix], fcal_indices0, fres_all0, qres_all0, \
             frough0, zrough0, fgain_out[ix], zgain_out[ix], ffine_out[ix], \

@@ -84,7 +84,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     # Extract theta and x
     if znoise_offres is not None:
         znoise_offres = np.array(znoise_offres)
-        theta_fine, theta_offres, theta_offres_clean, A_offres_clean, (ix0, ix1) =\
+        theta_fine, theta_offres, theta_offres_clean, A_offres_clean, (ix0_off, ix1_off) =\
         calibrate_timestreams(origin, ffine, zfine, fnoise_offres,
                               znoise_offres, dt_offres, deglitch_nstd,
                               flag_crs = False, offres = True, min_cal_points = min_cal_points)
@@ -95,6 +95,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
     else:
         theta_offres = None
         f_psd_offres, spar_offres, sper_offres = None, None, None
+        ix0_off, ix1_off = None, None
     if znoise is not None:
         znoise = np.array(znoise)
 
@@ -112,6 +113,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
         theta, poly, x, cr_indices, theta_range = None, None, None, None, None
         f_psd, spar, sper, sxx = None, None, None, None
         theta_clean = None
+        ix0, ix1 = None, None
     # Plots
     if plot_calq:
         fig_cal = plot_cal(ffine, zfine, popt_circle, fnoise, znoise,
