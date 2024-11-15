@@ -358,8 +358,10 @@ def calculate_theta_A(zfine, znoise, origin):
     theta_fine = np.angle(zfine_z)
     # Unwrap fine scan theta
     theta_fine = np.unwrap(2 * theta_fine) / 2
-    while theta_fine[0] < 0:
-        theta_fine += 2 * np.pi
+    while max(theta_fine) < 0:
+        theta_fine += 2 * np.pi 
+    while min(theta_fine) > 0: 
+        theta_fine -= 2 * np.pi 
     # Calculate theta of the noise
     noise_vec = np.transpose(np.array([np.real(znoise - origin),
                                        np.imag(znoise - origin)]))
@@ -368,5 +370,5 @@ def calculate_theta_A(zfine, znoise, origin):
     A_noise = np.abs(noise_z)
     # Make sure the range of theta matches the range of the fine scan
     theta_noise = np.where(theta_noise > 1, theta_noise - 2 * np.pi,
-                           theta_noise)
+                           theta_noise) 
     return theta_fine, theta_noise, A_noise

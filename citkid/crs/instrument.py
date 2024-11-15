@@ -304,6 +304,8 @@ class CRS:
         verbose (bool): if True, prints NCO frequency settings 
         """
         module_index = min(self.nco_freq_dict, key = lambda k: np.abs(self.nco_freq_dict[k] - frequency)) 
+        if self.nyquist_zones[module_index] != 1:
+            raise Exception('This is not set up for the second nyquist zone')
         if np.abs(frequency - self.nco_freq_dict[module_index] > 300e6):
             raise ValueError('Frequency must be within 300 MHz of an NCO frequency') 
         fsample = 625e6 / 256
@@ -416,7 +418,9 @@ class CRS:
         zcal = [[]] * nres 
         for module_index in module_indices:
             zrawi = convert_parser_to_z(data_path, self.crs_sn, module_index, ntones = len(self.ch_ix_dict[module_index])) 
-            zi = remove_internal_phaseshift(self.fres_dict[module_index][:, np.newaxis], zrawi, noise_zcal_dict[module_index][:, np.newaxis])
+            fres0 = self.fres_dict[module_index].copy()
+            fres0 = convert_freq_to_nyq(fres0, self.nyquist_zones[module_index])
+            zi = remove_internal_phaseshift(fres0[:, np.newaxis], zrawi, noise_zcal_dict[module_index][:, np.newaxis])
             for index, ch_index in enumerate(self.ch_ix_dict[module_index]):
                 z[ch_index] = zi[index]
                 zraw[ch_index] = zrawi[index]
@@ -555,14 +559,14 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, swe
             pbar = tqdm(pbar, total = n_points, leave = False)
             pbar.set_description(pbar_description)
         
-        frequencies = convert_freq_to_nyq(frequencies, nyquist_zones[module_index], 
+        frequencies_nyq = convert_freq_to_nyq(frequencies, nyquist_zones[module_index], 
                         adc_sampling_rate=5e9)
         nco_freq_nyq = convert_freq_to_nyq(nco_freq, nyquist_zones[module_index])
         for sweep_index in pbar:
             # Write frequencies 
             async with d.tuber_context() as ctx:
                 for ch in range(n_channels):
-                    f = frequencies[ch, sweep_index]
+                    f = frequencies_nyq[ch, sweep_index]
                     ctx.set_frequency(f - nco_freq_nyq, d.UNITS.HZ, ch + 1, module = module_index)
                 await ctx()
             nsamples_discard = 0 # 15
@@ -581,11 +585,11 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, swe
             # adjust for loopback calibration
             zcal[:, sweep_index] = zical 
             zraw[:, sweep_index] = zi * d.volts_per_roc 
-            zi = remove_internal_phaseshift(frequencies[:, sweep_index], zi, zical) 
+            zi = remove_internal_phaseshift(frequencies_nyq[:, sweep_index], zi, zical) 
             z[:, sweep_index] = zi * d.volts_per_roc 
         # Turn off channels 
         await d.clear_channels(module = module_index)
-        sweep_f[module_index] = convert_freq_from_nyq(frequencies, nyquist_zones[module_index])
+        sweep_f[module_index] = convert_freq_from_nyq(frequencies_nyq, nyquist_zones[module_index])
         sweep_z[module_index] = z
 
 @rfmux.macro(rfmux.ReadoutModule, register=True) 

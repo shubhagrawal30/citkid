@@ -94,7 +94,7 @@ def fit_fr_vs_temp(temperature, fr, gamma = 1, Tc_guess = 1.3, fr_err = None,
 ################################################################################
 def fit_fr_vs_temp_notls(temperature, fr, gamma = 1, Tc_guess = 1.3,
                          fr_err = None, guess = None, return_dataframe = False,
-                         plotq = False):
+                         bounds = None, Tc_min = None, plotq = False):
    """
    Fits resonance frequency versus temperature data to fr_vs_temp_notls
 
@@ -109,6 +109,8 @@ def fit_fr_vs_temp_notls(temperature, fr, gamma = 1, Tc_guess = 1.3,
         overwrites Tc_guess. [fr0_guess, alpha_guess, Tc_guess]
    return_dataframe (bool): If True, returns a pandas series of the output data
        instead of individual parameters
+   bounds (list or None): custom bounds to overwrite the default option 
+   Tc_min (float or None): overwrites the lower bound on Tc 
    plotq (bool): If True, plots the fit and initial guess
 
    Returns:
@@ -127,9 +129,13 @@ def fit_fr_vs_temp_notls(temperature, fr, gamma = 1, Tc_guess = 1.3,
    # Initial guess
    if guess is not None:
        p0 = guess
-       bounds = get_bounds_fr_vs_temp_notls(p0)
+       bounds0 = get_bounds_fr_vs_temp_notls(p0)
    else:
-       p0, bounds = guess_p0_fr_vs_temp_notls(temperature, fr, Tc_guess, gamma)
+       p0, bounds0 = guess_p0_fr_vs_temp_notls(temperature, fr, Tc_guess, gamma)
+   if bounds is None:
+       bounds = bounds0
+   if Tc_min is not None:
+       bounds[0][2] = Tc_min
    # Fit
    if fr_err is None:
        sigma = None
