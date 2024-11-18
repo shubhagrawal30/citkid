@@ -8,7 +8,8 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
                 znoise_offres = None, dt_offres = None, flag_crs = True,
                 deglitch_nstd = 5, plot_calq = True, plot_psdq = True,
                 plot_timestreamq = True, min_cal_points = 5, 
-                circfit_npoints = None, **cr_kwargs):
+                circfit_npoints = None, xcal_weight_sigma = None, 
+                xcal_weight_theta0 = 0.0, **cr_kwargs):
     """
     Computes parallel and perpendicular noise PSDs, as well as Sxx
 
@@ -35,6 +36,10 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
         figure
     plot_timestreamq (bool): If True, plots the timestream figure. Else, returns
         None for the figure
+    xcal_weight_sigma (float): stdev of gaussian weight function for 
+        fitter in radians. Defaults to None for no weighting.
+    xcal_weight_theta0 (float): center point in radians for gaussian 
+        weight function
     **cr_kwargs: kwargs for cosmic ray removal
 
     Returns:
@@ -87,7 +92,8 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
         theta_fine, theta_offres, theta_offres_clean, A_offres_clean, (ix0_off, ix1_off) =\
         calibrate_timestreams(origin, ffine, zfine, fnoise_offres,
                               znoise_offres, dt_offres, deglitch_nstd,
-                              flag_crs = False, offres = True, min_cal_points = min_cal_points)
+                              flag_crs = False, offres = True, min_cal_points = min_cal_points,
+                              xcal_weight_theta0 = xcal_weight_theta0, xcal_weight_sigma = xcal_weight_sigma)
 
         spar_offres = 10 * np.log10(get_psd(radius * theta_offres_clean, dt_offres))
         sper_offres = 10 * np.log10(get_psd(A_offres_clean, dt_offres))
@@ -103,6 +109,7 @@ def compute_psd(ffine, zfine, fnoise, znoise, dt, fnoise_offres = None,
         calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
                               deglitch_nstd, flag_crs = flag_crs, offres = False,
                               min_cal_points = min_cal_points,
+                              xcal_weight_theta0 = xcal_weight_theta0, xcal_weight_sigma = xcal_weight_sigma,
                               **cr_kwargs)
 
         sxx = get_psd(x, dt)
@@ -200,7 +207,8 @@ def compute_psd_simple(ffine, zfine, fnoise, znoise, dt, deglitch_nstd = 5):
 
 def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
                           deglitch_nstd, flag_crs, offres = False, 
-                          min_cal_points = 5, **cr_kwargs):
+                          min_cal_points = 5, xcal_weight_sigma = None, 
+                          xcal_weight_theta0 = 0.0, **cr_kwargs):
     """
     Calculates theta and x timestreams given complex IQ noise timestreams.
     1) calculate theta of the sweep data an noise timestream
@@ -220,6 +228,10 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
     flag_crs (bool): If True, flags cosmic rays and returns a list of indices
         where they were found. If False, does not flag cosmic rays
     offres (bool): if True, only calibrates theta and bypasses x calibration
+    xcal_weight_sigma (float): stdev of gaussian weight function for 
+        fitter in radians. Defaults to None for no weighting.
+    xcal_weight_theta0 (float): center point in radians for gaussian 
+        weight function
     **cr_kwargs: kwargs for cosmic ray removal
 
     Returns:
@@ -254,14 +266,16 @@ def calibrate_timestreams(origin, ffine, zfine, fnoise, znoise, dt,
         theta_clean = theta.copy()
     # Calibrate x
     poly, theta_range, (ix0, ix1) = \
-        calibrate_x(ffine, theta_fine, theta_clean, min_cal_points = min_cal_points)
+        calibrate_x(ffine, theta_fine, theta_clean, min_cal_points = min_cal_points, 
+                    weight_sigma = xcal_weight_sigma, weight_theta0 = xcal_weight_theta0)
 
     fs_clean = np.polyval(poly, theta_clean)
     x = 1 - fs_clean / fnoise
     return theta_fine, theta, theta_clean, A_clean, theta_range, poly, x, cr_indices, (ix0, ix1)
 
 def calibrate_x(ffine, theta_fine, theta_clean, poly_deg = 3,
-                min_cal_points = 5):
+                min_cal_points = 5, weight_sigma = None, 
+                weight_theta0 = 0.0):
     """
     Fit fine scan frequency to phase
 
@@ -271,6 +285,10 @@ def calibrate_x(ffine, theta_fine, theta_clean, poly_deg = 3,
     theta_clean (np.array): deglitched theta noise timestream data
     poly_deg (int): degree of the polynomial fit
     min_cal_points (int): minimum number of points for the polynomial fit
+    weight_sigma (float): stdev of gaussian weight function for 
+        fitter in radians. Defaults to None for no weighting.
+    weight_theta0 (float): center point in radians for gaussian 
+        weight function
 
     Returns:
     poly (np.array): polynomial fit parameters
@@ -299,9 +317,16 @@ def calibrate_x(ffine, theta_fine, theta_clean, poly_deg = 3,
     if ix1 >= len(theta_fine):
         ix0 -= ix1 - len(theta_fine) # increase ix2 by the amount above len(theta_fine)
         ix1 = len(theta_fine)
+    
+    # Bias the fit toward an area we care more about
+    weight = None
+    if weight_sigma is not None:
+        t = theta_fine[ix0:ix1] - weight_theta0
+        weight = np.exp(-(t)**2 / (2 * weight_sigma**2))
+        
     # Fit to data in range
     poly = np.polyfit(theta_fine[ix0:ix1], ffine[ix0:ix1],
-                      deg = poly_deg)
+                      deg = poly_deg, w = weight)
     theta_range = np.array([theta_fine[ix0], theta_fine[ix1 - 1]])
 
     return poly, theta_range, (ix0, ix1)
