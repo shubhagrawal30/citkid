@@ -295,7 +295,7 @@ def calibrate_x(ffine, theta_fine, theta_clean, poly_deg = 3,
         ix1 += - ix0 # Increase ix1 by the amount below 0
         ix0 = 0
     if ix1 >= len(theta_fine):
-        ix0 += ix1 - len(theta_fine) # increase ix2 by the amount above len(theta_fine)
+        ix0 -= ix1 - len(theta_fine) # increase ix2 by the amount above len(theta_fine)
         ix1 = len(theta_fine)
     # Fit to data in range
     poly = np.polyfit(theta_fine[ix0:ix1], ffine[ix0:ix1],
