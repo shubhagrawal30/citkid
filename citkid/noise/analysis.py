@@ -357,7 +357,8 @@ def calculate_theta_A(zfine, znoise, origin):
     zfine_z = np.dot(zfine_vec, x_vec) + 1j * np.dot(zfine_vec, y_vec)
     theta_fine = np.angle(zfine_z)
     # Unwrap fine scan theta
-    theta_fine = np.unwrap(2 * theta_fine) / 2
+    #theta_fine = np.unwrap(2 * theta_fine) / 2
+    theta_fine = np.unwrap(theta_fine)
     while max(theta_fine) < 0:
         theta_fine += 2 * np.pi 
     while min(theta_fine) > 0: 
