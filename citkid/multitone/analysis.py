@@ -215,7 +215,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     directory = data.iloc[0].dataDirectory
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices, fres_noise =\
-    import_iq_noise(directory, file_suffix0, import_noiseq = False)
+    import_iq_noise(directory, file_suffix0, import_noiseq = True)
     inoise, qnoise = np.load(directory + f'noise{file_suffix}_{noise_index:02d}.npy')
     dt = float(np.load(directory + f'noise{file_suffix}_tsample_{noise_index:02d}.npy'))
 

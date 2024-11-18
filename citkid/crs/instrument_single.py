@@ -34,7 +34,7 @@ class CRS:
         self.volts_per_roc = volts_per_roc
         
     async def configure_system(self, clock_source="SMA", full_scale_dbm = 1, analog_bank_high = False,
-                               verbose = True):
+                               verbose = True, nyquist_zones = {1: 1, 2: 1, 3: 1, 4: 1}):
         """
         Resolves the system, sets the timestamp port, sets the clock source, and sets the full scale
         in dBm 
@@ -44,6 +44,7 @@ class CRS:
             crystal oscillator or 'SMA' for the external 10 MHz reference (5 Vpp I think) 
         full_scale_dbm (int): full scale power in dBm. range is [???, 7?]
         verbose (bool): If True, gets and prints the clocking source 
+        nyquist_zones (dict): keys (int) are module indicies and values (int) are nyquist zone numbers (1 or 2)
         """
         await self.d.resolve()
 
@@ -68,6 +69,15 @@ class CRS:
             print("Clocking source is", await self.d.get_clock_source())
 
         await self.d.set_analog_bank(high = analog_bank_high)
+
+        self.set_nyquist_zone(nyquist_zones)
+
+    async def set_nyquist_zone(self, nyquist_zones):
+        if any([nz not in [1, 2] for nz in nyquist_zones.values()]):
+            raise ValueError('Nyquist zone must be in [1, 2]')
+        for module_index, zone in nyquist_zones.items():
+            self.d.set_nyquist_zone(zone, module = module_index) 
+        self.nyquist_zones = nyquist_zones 
 
     async def set_sequential_ncos(self, ncos):
         self.ncos = ncos
@@ -115,6 +125,8 @@ class CRS:
         comb_sampling_freq = transferfunctions.get_comb_sampling_freq()
         threshold = 101.
         fres[fres%(comb_sampling_freq/512) < threshold] += threshold
+        fres_nyq = convert_freq_to_nyq(fres, self.nyquist_zones[self.module_index], 
+                                              adc_sampling_rate=5e9)
 
         if any(ares > self.full_scale_dbm):
             raise ValueError(f'ares must not exceed {self.full_scale_dbm} dBm: raise full_scale_dbm or lower powers')
@@ -126,7 +138,7 @@ class CRS:
         
         nco = await self.d.get_nco_frequency(self.d.UNITS.HZ, module=self.module_index)
         async with self.d.tuber_context() as ctx:
-            for ch, (fr, ar) in enumerate(zip(fres,ares_amplitude)):
+            for ch, (fr, ar) in enumerate(zip(fres_nyq,ares_amplitude)):
                 ## To be wrapped in context_manager
                 ctx.set_frequency(fr-nco, self.d.UNITS.HZ, ch+1, module=self.module_index)
                 ctx.set_amplitude(ar, self.d.UNITS.NORMALIZED, target=self.d.TARGET.DAC, channel=ch+1, module=self.module_index)
@@ -244,6 +256,8 @@ class CRS:
         comb_sampling_freq = transferfunctions.get_comb_sampling_freq()
         threshold = 101.
         frequencies[frequencies%(comb_sampling_freq/512) < threshold] += threshold
+        frequencies_nyq = convert_freq_to_nyq(frequencies, self.nyquist_zones[self.module_index], 
+                                              adc_sampling_rate=5e9)
 
         n_channels, n_points = frequencies.shape
         if len(ares) != n_channels:
@@ -270,7 +284,7 @@ class CRS:
             # Write frequencies 
             async with self.d.tuber_context() as ctx:
                 for ch in range(n_channels):
-                    f = frequencies[ch, sweep_index]
+                    f = frequencies_nyq[ch, sweep_index]
                     ctx.set_frequency(f - self.nco_freq, self.d.UNITS.HZ, ch + 1, module = self.module_index)
                 await ctx()
 
@@ -492,7 +506,7 @@ class CRS:
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
                                    f'{self.crs_sn:04d}', '-m', str(self.module_index), '-n', str(num_samps)], 
                                    shell=False)
-        pbar = list(range(int(noise_time) + 10))
+        pbar = list(range(int(noise_time * 1.5)))
         if verbose:
             pbar = tqdm(pbar, leave = False)
         for i in pbar:

@@ -23,7 +23,9 @@ def guess_p0_nonlinear_iq(f, z):
     # guess tau
     tau_guess = 0
     # guess phi and amp
-    phi_guess, amp_guess = guess_phi_amp(z, z0_guess)
+    phi_guess, amp_guess = guess_phi_amp(z, z0_guess) 
+    if amp_guess > 1 - 1e-6:
+        amp_guess = 1 - 1e-6
     # guess Qr
     Qr_guess = guess_Qr(f, z, z0_guess, phi_guess, amp_guess)
     # guess a

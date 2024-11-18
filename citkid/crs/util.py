@@ -77,3 +77,40 @@ def find_key_and_index(dictionary, j):
         if indices.size > 0:  # Check if 'j' was found
             return key, indices[0]
     return None, None  # Return (None, None) if 'j' is not found in any array
+
+def convert_freq_to_nyq(target_frequency, nyquist_zone, 
+                        adc_sampling_rate=5e9):
+    """
+    Converts an output frequency to the value to send to the DAC given the 
+    Nyquist zone 
+
+    Parameters:
+    target_frequency (float): target frequency in Hz 
+    nyquist_zone (int): Nyquist zone number (1 or 2) 
+    adc_sample_rate (float): ADC sample rate in Hz 
+    """
+    if nyquist_zone == 1:
+        return target_frequency 
+    elif nyquist_zone == 2:
+        return adc_sampling_rate - target_frequency 
+    else:
+        raise ValueError('nyquist_zone must be in [1, 2]')
+    
+
+def convert_freq_from_nyq(target_frequency, nyquist_zone, 
+                        adc_sampling_rate=5e9):
+    """
+    Converts a frequency from the CRS board to the actual frequency given 
+    the nyquist zone 
+
+    Parameters:
+    target_frequency (float): target frequency in Hz 
+    nyquist_zone (int): Nyquist zone number (1 or 2) 
+    adc_sample_rate (float): ADC sample rate in Hz 
+    """
+    if nyquist_zone == 1:
+        return target_frequency 
+    elif nyquist_zone == 2:
+        return adc_sampling_rate - target_frequency
+    else:
+        raise ValueError('nyquist_zone must be in [1, 2]')
