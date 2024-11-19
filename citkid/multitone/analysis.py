@@ -20,7 +20,7 @@ matplotlib.use('Agg')
 # Need to update docstrings, imports
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature, rejected_points = [],
-           extra_fitdata_values = {}, plotq = False, plot_factor = 1,
+           extra_fitdata_values = {}, plotq = False, plot_factor = 1, cut_to_qres = False,
            overwrite = False, verbose = True, catch_exceptions = False):
     """
     Fits all IQ loops in a target scan
@@ -49,6 +49,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     plotq (bool): If True, plots IQ fits and saves them
     plot_factor (int): for plotting a subset of resonators. Plots every
         plot_factor resonators
+    cut_to_qres (bool): If True, cuts the fine scan data to the span of fres / qres
     overwrite (bool): if not True, raises an exception if the output data file
         already exists
     verbose (bool): If True, displays a progress bar as data is taken
@@ -63,6 +64,7 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices, fres_noise =\
     import_iq_noise(directory, file_suffix, import_noiseq = False)
+    print(qres_all[0])
     rejected_points = list(rejected_points)
     # Set up output files
     if file_suffix != '':
@@ -97,6 +99,9 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         # Cut adjacent resonators from data before fitting
         if pbar_index not in fcal_indices:
             ffine, zfine = cut_fine_scan(ffine, zfine, fres, fres / qres)
+        if cut_to_qres:
+            ix = np.abs(ffine - fr) < fr / Qr  
+            ffine, zfine = ffine[ix], zfine[ix] 
 
         file_prefix = f'Tn{temperature_index}Fn{resonator_index}'
         file_prefix += f'Pn{power_number}{file_suffix}'

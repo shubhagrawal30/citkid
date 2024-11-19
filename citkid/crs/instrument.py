@@ -420,7 +420,7 @@ class CRS:
             zrawi = convert_parser_to_z(data_path, self.crs_sn, module_index, ntones = len(self.ch_ix_dict[module_index])) 
             fres0 = self.fres_dict[module_index].copy()
             fres0 = convert_freq_to_nyq(fres0, self.nyquist_zones[module_index])
-            zi = remove_internal_phaseshift(fres0[:, np.newaxis], zrawi, noise_zcal_dict[module_index][:, np.newaxis])
+            zi = remove_internal_phaseshift(fres0[:, np.newaxis], zrawi, noise_zcal_dict[module_index][:, np.newaxis], self.nyquist_zones[module_index])
             for index, ch_index in enumerate(self.ch_ix_dict[module_index]):
                 z[ch_index] = zi[index]
                 zraw[ch_index] = zrawi[index]
@@ -585,7 +585,7 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, swe
             # adjust for loopback calibration
             zcal[:, sweep_index] = zical 
             zraw[:, sweep_index] = zi * d.volts_per_roc 
-            zi = remove_internal_phaseshift(frequencies_nyq[:, sweep_index], zi, zical) 
+            zi = remove_internal_phaseshift(frequencies_nyq[:, sweep_index], zi, zical, nyquist_zones[module_index]) 
             z[:, sweep_index] = zi * d.volts_per_roc 
         # Turn off channels 
         await d.clear_channels(module = module_index)
