@@ -162,7 +162,9 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                   plot_timestreamq = False, plot_factor = 1, min_cal_points = 5,
                   deglitch_nstd = 10, cr_nstd = 5, cr_width = 100e-6,
                   cr_peak_spacing = 100e-6, cr_removal_time = 1e-3, circfit_npoints = None,
-                  overwrite = False, verbose = False, catch_exceptions = False):
+                  overwrite = False, verbose = False, catch_exceptions = False,
+                  res_whitelist = None, xcal_weight_sigma = None, xcal_weight_theta0 = 0.0,
+                  circfit_mode = 'sequential'):
     """
     Analyze noise data to produce timestreams and PSDs
 
@@ -192,7 +194,16 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     verbose (bool): if True, displays a progress bar while analyzing noise
     catch_exceptions (bool): If True, catches any exceptions that occur while
         analyzing noise data and proceeds
-
+    res_whitelist (list or None): if not None, only process the resonator
+		indices listed; otherwise process all
+    xcal_weight_sigma (float): stdev of gaussian weight function for 
+        fitter in radians. Defaults to None for no weighting.
+    xcal_weight_theta0 (float): center point in radians for gaussian 
+        weight function
+    circfit_mode (str): method used to select the points used in fitting
+		the IQ circle ('sequential' uses adjacent indices, 'nearest_z'
+		uses distance in the z plane)
+    
     Returns:
     data_new (pd.DataFrame): output data with the noise analysis parameters
         inserted. This DataFrame is also saved as a csv file in
@@ -225,6 +236,8 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         pbar.set_description('noise index')
     data_new = pd.DataFrame([])
     for data_index, res_index in enumerate(pbar):
+        if (res_whitelist is not None) and (res_index not in res_whitelist):
+            continue		
         plot_calq_single = ((data_index % plot_factor) == 0) and plot_calq
         plot_psdq_single = ((data_index % plot_factor) == 0) and plot_psdq
         plot_timestreamq_single = ((data_index % plot_factor) == 0) and plot_timestreamq
@@ -243,10 +256,21 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
         zfine = remove_gain(ffine, zfine, p_amp, p_phase)
         znoise = remove_gain(fnoise, znoise, p_amp, p_phase) 
 
-        if circfit_npoints is not None:
+        if circfit_mode == 'sequential':
+            # Sequential steps near noise mean (previous default behavior)
             ix_mid = np.argmin(np.abs(np.mean(znoise) - zfine)) 
             ix0, ix1 = ix_mid - circfit_npoints // 2, ix_mid + (circfit_npoints - circfit_npoints // 2) 
             ffine, zfine = ffine[ix0:ix1], zfine[ix0:ix1]
+        elif circfit_mode == 'nearest_z':
+            # Take the n points closest to the median of the noise by
+            # checking the 2D distance in z.  Helps exclude large
+            # IQ sweep jumps next to noise balls.
+            zfine_dist = np.abs(zfine - np.nanmedian(znoise))
+            i_nearest = np.argsort(zfine_dist)[:circfit_npoints]
+            ffine, zfine = ffine[i_nearest], zfine[i_nearest]
+        else:
+            raise ValueError("Invalid value for circfit_mode: " + str(circfit_mode))
+            
         try:
             if data_index in fcal_indices:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
@@ -257,7 +281,9 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             deglitch_nstd = deglitch_nstd,
                             plot_calq = plot_calq_single, 
                             plot_psdq = plot_psdq_single, min_cal_points = min_cal_points,
-                            plot_timestreamq = plot_timestreamq_single)
+                            plot_timestreamq = plot_timestreamq_single,
+                            xcal_weight_theta0 = xcal_weight_theta0,
+                            xcal_weight_sigma = xcal_weight_sigma)
                 if correct_cic2:
                     for i in range(1, 3):
                         ftrim_off, s = apply_cic2_comp_psd(psd_offres[0], 10 ** (psd_offres[i] / 10), 1 / dt, trim=0.15)
@@ -279,7 +305,9 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             plot_timestreamq = plot_timestreamq_single,
                             cr_nstd = cr_nstd, cr_width = cr_width,
                             cr_peak_spacing = cr_peak_spacing,
-                            cr_removal_time = cr_removal_time)
+                            cr_removal_time = cr_removal_time,
+                            xcal_weight_theta0 = xcal_weight_theta0,
+                            xcal_weight_sigma = xcal_weight_sigma)
 
                 if correct_cic2:
                     for i in range(1, 3):
