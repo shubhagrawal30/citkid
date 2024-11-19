@@ -132,7 +132,7 @@ def guess_phi_amp(z, z0):
     Returns:
     phi_guess (float): phi guess
     amp_guess (float): amp guess
-    """
+    """ 
     popt, _ = fitter.fit_iq_circle(z, plotq = False)
     xc, yc, R = popt
     # angle between center of circle and off resonance point

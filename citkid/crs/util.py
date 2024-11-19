@@ -32,7 +32,7 @@ def remove_internal_phaseshift(f, z, zcal, nyquist_zone):
     zcor (np.array): z corrected for the carrier calibration data 
     """ 
     f, z, zcal = np.asarray(f), np.asarray(z), np.asarray(zcal)
-    f = convert_freq_to_nyq(f, nyquist_zone)
+    # f = convert_freq_to_nyq(f, nyquist_zone)
     latency = transferfunctions.get_latency() 
     zcal_angle =  np.angle(zcal)
     latency_adjustment = np.pi * (1 - (2 * latency) * (f % (1 / latency)))

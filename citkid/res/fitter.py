@@ -44,10 +44,15 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
         fig (pyplot.figure or None): figure with gain fit and nonlinear IQ
             fit if plotq, or None
     """
-
+    # Remove gain 
     p_amp, p_phase, zfine_rmvd, (fig_gain, axs_gain) = \
         fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, frs, Qrs,
-                                  plotq = plotq)
+                                  plotq = plotq) 
+    # Rotate data for better plots 
+    zoff = np.mean(np.roll(zfine_rmvd, 6)[:6]) 
+    zfine_rmvd *= np.exp(-1j * np.angle(zoff)) 
+    p_phase[1] += np.angle(zoff)
+    # Fit IQ 
     p0, popt, perr, res, (fig_fit, axs_fit) = fit_nonlinear_iq(ffine,
                                             zfine_rmvd, plotq = plotq, **kwargs)
     if plotq:
