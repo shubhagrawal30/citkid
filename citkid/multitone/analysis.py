@@ -258,9 +258,10 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
 
         if circfit_mode == 'sequential':
             # Sequential steps near noise mean (previous default behavior)
-            ix_mid = np.argmin(np.abs(np.mean(znoise) - zfine)) 
-            ix0, ix1 = ix_mid - circfit_npoints // 2, ix_mid + (circfit_npoints - circfit_npoints // 2) 
-            ffine, zfine = ffine[ix0:ix1], zfine[ix0:ix1]
+            if circfit_npoints is not None:
+                ix_mid = np.argmin(np.abs(np.mean(znoise) - zfine)) 
+                ix0, ix1 = ix_mid - circfit_npoints // 2, ix_mid + (circfit_npoints - circfit_npoints // 2) 
+                ffine, zfine = ffine[ix0:ix1], zfine[ix0:ix1]
         elif circfit_mode == 'nearest_z':
             # Take the n points closest to the median of the noise by
             # checking the 2D distance in z.  Helps exclude large
