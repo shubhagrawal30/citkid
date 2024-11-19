@@ -381,13 +381,15 @@ def calculate_theta_A(zfine, znoise, origin):
                                        np.imag(zfine - origin)]))
     zfine_z = np.dot(zfine_vec, x_vec) + 1j * np.dot(zfine_vec, y_vec)
     theta_fine = np.angle(zfine_z)
+    extrapolate_mode = (min(theta_fine) > 0) or (max(theta_fine) < 0)
     # Unwrap fine scan theta
     #theta_fine = np.unwrap(2 * theta_fine) / 2
     theta_fine = np.unwrap(theta_fine)
-    while max(theta_fine) < 0:
-        theta_fine += 2 * np.pi 
-    while min(theta_fine) > 0: 
-        theta_fine -= 2 * np.pi 
+    if not extrapolate_mode:
+        while max(theta_fine) < 0:
+            theta_fine += 2 * np.pi 
+        while min(theta_fine) > 0: 
+            theta_fine -= 2 * np.pi 
     # Calculate theta of the noise
     noise_vec = np.transpose(np.array([np.real(znoise - origin),
                                        np.imag(znoise - origin)]))
