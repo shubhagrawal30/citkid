@@ -447,7 +447,7 @@ class CRS:
         zraw = np.array([zi[:data_len] for zi in zraw])
         if delete_parser_data:
             shutil.rmtree('tmp/')
-        if nyquist_zones[module_index] == 2:
+        if self.nyquist_zones[module_index] == 2:
             z = np.conjugate(z)
         z /= 10 ** (ares[:, np.newaxis] / 20)
         if self.splitter:
