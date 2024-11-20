@@ -105,7 +105,7 @@ class CRS:
         if any([m not in [1,2,3,4] for m in modules]):
             raise ValueError(f'modules must be in range [1, 4]')
         nco_freq_dict = {key: convert_freq_to_nyq(value, self.nyquist_zones[key]) for key, value in nco_freq_dict.items()}
-        if any([nco > 2.5e9 - 325e6 for nco in nco_freq_dict.values()]):
+        if any([nco > 2.5e9 - 312.5e6 for nco in nco_freq_dict.values()]):
             raise ValueError('NCOs must be less than 2.175 GHz to avoid Nyquist reflections')
         modules = list(nco_freq_dict.keys())
         await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).set_nco(nco_freq_dict, 
@@ -146,8 +146,8 @@ class CRS:
         self.ares_dict = {key: np.array(value) for key, value in self.ares_dict.items()}
         self.ch_ix_dict = {key: np.array(value) for key, value in self.ch_ix_dict.items()}
         for module_index in self.nco_freq_dict.keys():
-            if any(np.abs(self.fres_dict[module_index] - self.nco_freq_dict[module_index]) > 325e6):
-                raise ValueError('All of fres must be within 325 MHz of an NCO frequency') 
+            if any(np.abs(self.fres_dict[module_index] - self.nco_freq_dict[module_index]) > 312.5e6):
+                raise ValueError('All of fres must be within12.5 MHz of an NCO frequency') 
         # Write tones 
         modules = list(self.fres_dict.keys())
         await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).write_tones(self.nco_freq_dict, self.fres_dict, 
@@ -184,8 +184,8 @@ class CRS:
         self.ares_dict = {key: np.array(value) for key, value in self.ares_dict.items()}
         self.ch_ix_dict = {key: np.array(value) for key, value in self.ch_ix_dict.items()}
         for module_index in self.nco_freq_dict.keys():
-            if any(np.abs(self.frequencies_dict[module_index] - self.nco_freq_dict[module_index]).flatten() > 325e6):
-                raise ValueError('All of frequencies must be within 325 MHz of an NCO frequency') 
+            if any(np.abs(self.frequencies_dict[module_index] - self.nco_freq_dict[module_index]).flatten() > 312.5e6):
+                raise ValueError('All of frequencies must be within 312.5 MHz of an NCO frequency') 
                 
         # Set fir_stage
         fir_stage = 6 
