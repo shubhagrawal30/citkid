@@ -78,18 +78,15 @@ def combine_figures_vertically(fig1, fig2):
     Returns:
     fig (pyplot.figure): combined figure
     """
-    buf1 = save_figure_to_memory(fig1)
-    buf2 = save_figure_to_memory(fig2)
-    plt.close(fig1)
-    plt.close(fig2)
-    fig, axs = plt.subplots(2, 1, dpi = 200, layout = 'tight')
-    for ax in axs:
-        ax.set_axis_off()
-    axs[0].imshow(plt.imread(buf1))
-    axs[1].imshow(plt.imread(buf2))
-    fig.tight_layout() 
-    buf1.close()
-    buf2.close()
+    with save_figure_to_memory(fig1) as buf1, save_figure_to_memory(fig2) as buf2:
+        plt.close(fig1)
+        plt.close(fig2)
+        fig, axs = plt.subplots(2, 1, dpi = 200, layout = 'tight')
+        for ax in axs:
+            ax.set_axis_off()
+        axs[0].imshow(plt.imread(buf1))
+        axs[1].imshow(plt.imread(buf2))
+        fig.tight_layout()
     return fig
 
 def combine_figures_horizontally(fig1, fig2):
@@ -102,16 +99,15 @@ def combine_figures_horizontally(fig1, fig2):
     Returns:
     fig (pyplot.figure): combined figure
     """
-    buf1 = save_figure_to_memory(fig1)
-    buf2 = save_figure_to_memory(fig2)
-    plt.close(fig1)
-    plt.close(fig2)
-    fig, axs = plt.subplots(1, 2, dpi = 200, layout = 'tight')
-    for ax in axs:
-        ax.set_axis_off()
-    axs[0].imshow(plt.imread(buf1))
-    axs[1].imshow(plt.imread(buf2))
-    fig.tight_layout()
+    with save_figure_to_memory(fig1) as buf1, save_figure_to_memory(fig2) as buf2:
+        plt.close(fig1)
+        plt.close(fig2)
+        fig, axs = plt.subplots(1, 2, dpi = 200, layout = 'tight')
+        for ax in axs:
+            ax.set_axis_off()
+        axs[0].imshow(plt.imread(buf1))
+        axs[1].imshow(plt.imread(buf2))
+        fig.tight_layout()
     return fig
 
 def to_scientific_notation(number):
