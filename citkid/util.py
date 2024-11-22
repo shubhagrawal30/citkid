@@ -68,7 +68,7 @@ def save_figure_to_memory(fig):
     buf.seek(0)
     return buf
 
-def combine_figures_vertically(fig1, fig2):
+def combine_figures_vertically(fig1, fig2, dpi = 200):
     """
     Combine two matplotlib figures vertically for saving as a single file
 
@@ -81,7 +81,7 @@ def combine_figures_vertically(fig1, fig2):
     with save_figure_to_memory(fig1) as buf1, save_figure_to_memory(fig2) as buf2:
         plt.close(fig1)
         plt.close(fig2)
-        fig, axs = plt.subplots(2, 1, dpi = 200, layout = 'tight')
+        fig, axs = plt.subplots(2, 1, dpi = dpi, layout = 'tight')
         for ax in axs:
             ax.set_axis_off()
         axs[0].imshow(plt.imread(buf1))
@@ -89,7 +89,7 @@ def combine_figures_vertically(fig1, fig2):
         fig.tight_layout()
     return fig
 
-def combine_figures_horizontally(fig1, fig2):
+def combine_figures_horizontally(fig1, fig2, dpi = 200):
     """
     Combine two matplotlib figures horizontally for saving as a single file
 
@@ -102,7 +102,7 @@ def combine_figures_horizontally(fig1, fig2):
     with save_figure_to_memory(fig1) as buf1, save_figure_to_memory(fig2) as buf2:
         plt.close(fig1)
         plt.close(fig2)
-        fig, axs = plt.subplots(1, 2, dpi = 200, layout = 'tight')
+        fig, axs = plt.subplots(1, 2, dpi = dpi, layout = 'tight')
         for ax in axs:
             ax.set_axis_off()
         axs[0].imshow(plt.imread(buf1))
