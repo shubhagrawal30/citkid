@@ -51,17 +51,15 @@ def remove_cosmic_rays(theta, A, tsample, cr_nstd = 5, cr_width = 100e-6,
     for irange in iranges:
         # determine indices of data before and after the data to cut
         ilen = irange[1] - irange[0]
-        ibef = [irange[0] - ilen - 1, irange[0] - 1]
-        iaft = [irange[1], irange[1] + ilen]
-        if ibef[0] < 0:
-            ibef[0] = 0
-        if iaft[1] > len(theta):
-            iaft[1] = len(theta)
+        ibef = [max(0, irange[0] - ilen - 1), max(0, irange[0] - 1)]
+        iaft = [min(len(theta), irange[1]), min(len(theta), irange[1] + ilen)]
+        nbef = ibef[1] - ibef[0]
+        naft = iaft[1] - iaft[0]
         # Make theta_bef and theta_aft arrays
-        theta_bef = theta[ibef[0]: ibef[1]]
-        theta_aft = theta[iaft[0]: iaft[1]]
-        A_bef = A[ibef[0]: ibef[1]]
-        A_aft = A[iaft[0]: iaft[1]]
+        theta_bef = theta[ibef[0]: ibef[1]] if nbef else [np.nan]
+        theta_aft = theta[iaft[0]: iaft[1]] if naft else [np.nan]
+        A_bef = A[ibef[0]: ibef[1]] if nbef else [np.nan]
+        A_aft = A[iaft[0]: iaft[1]] if naft else [np.nan]
         length_diff = len(theta_aft) - len(theta_bef)
         if length_diff > 0: # data before is too short
             theta_bef = np.concatenate([theta_bef, theta_aft[:length_diff]])
@@ -69,9 +67,9 @@ def remove_cosmic_rays(theta, A, tsample, cr_nstd = 5, cr_width = 100e-6,
         elif length_diff < 0: # data before is too short
             theta_aft = np.concatenate([theta_aft, theta_bef[:-length_diff]])
             A_aft = np.concatenate([A_aft, A_bef[:-length_diff]])
-        theta_rmvd[irange[0]: irange[1]] = np.mean([theta_bef, theta_aft],
+        theta_rmvd[irange[0]: irange[1]] = np.nanmean([theta_bef, theta_aft],
                                                     axis = 0)
-        A_rmvd[irange[0]: irange[1]] = np.mean([A_bef, A_aft], axis = 0)
+        A_rmvd[irange[0]: irange[1]] = np.nanmean([A_bef, A_aft], axis = 0)
     return cr_indices, theta_rmvd, A_rmvd
 
 ################################################################################
