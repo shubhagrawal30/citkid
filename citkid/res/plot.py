@@ -100,5 +100,4 @@ def plot_gain_fit(f0, dB0, f, dB, phase, p_amp, p_phase):
         axs[1].plot((fsamp - fmean) * 1e-3, np.polyval(p_phase, fsamp), '--r', label='Fit')
 
     # axs[1].legend(framealpha=1)
-    fig.tight_layout()
     return fig, axs

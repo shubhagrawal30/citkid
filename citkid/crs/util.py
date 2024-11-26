@@ -19,7 +19,7 @@ def volts_to_dbm(volts):
     watts = v_rms ** 2 / termination
     return 10. * np.log10(watts * 1e3)
 
-def remove_internal_phaseshift(f, z, zcal):
+def remove_internal_phaseshift(f, z, zcal, nyquist_zone):
     """
     Corrects measured samples by the corresponding loopback measurement
     
@@ -32,6 +32,7 @@ def remove_internal_phaseshift(f, z, zcal):
     zcor (np.array): z corrected for the carrier calibration data 
     """ 
     f, z, zcal = np.asarray(f), np.asarray(z), np.asarray(zcal)
+    # f = convert_freq_to_nyq(f, nyquist_zone)
     latency = transferfunctions.get_latency() 
     zcal_angle =  np.angle(zcal)
     latency_adjustment = np.pi * (1 - (2 * latency) * (f % (1 / latency)))
