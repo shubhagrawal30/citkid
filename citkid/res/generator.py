@@ -91,17 +91,17 @@ def get_random_resonance_parameters():
     p (list): nonlinear IQ model parameters
     """
     random = lambda low, high: np.random.uniform(low, high)
-    random_log = lambda low, high: np.exp(np.random.uniform(np.log(low),
-                                                            np.log(high)))
+
+
     fr_noise_nstd  = random(-10, -7.3979400086720375)
     fr_noise_nstd  = 10 ** fr_noise_nstd
     amp_noise_nstd = random(-4.5, -2.3)
     amp_noise_nstd = 10 ** amp_noise_nstd
-    fr = random(10e6, 6e9)
-    Qr = random(1e3, 1e6)
+    fr = random_log(10e6, 10e9)
+    Qr = random_log(1e3, 1e6)
     amp = random(1e-3, 1 - 1e-5)
     phi = random(-np.pi / 2, np.pi / 2)
-    a = random(0, 2)
+    a = random(0, 1)
 
     p_amp0 = random(-5e-21, 5e-21)
     p_amp1 = random(-8e-8, 8e-8)

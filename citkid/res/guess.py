@@ -23,7 +23,7 @@ def guess_p0_nonlinear_iq(f, z):
     # guess tau
     tau_guess = 0
     # guess phi and amp
-    phi_guess, amp_guess = guess_phi_amp(z, z0_guess) 
+    phi_guess, amp_guess = guess_phi_amp(z, z0_guess)
     if amp_guess > 1 - 1e-6:
         amp_guess = 1 - 1e-6
     # guess Qr
@@ -63,7 +63,7 @@ def guess_Qr(f, z, z0, phi, amp):
     # Find the peak
     xpeak, ypeak, fwhm = get_peak_fwhm(f, z_rot)
     fwhm /= xpeak
-    poly = [-0.9466455 ,  1.77984571]
+    poly = [-0.94123147,  1.80699622]
     Qr_guess = np.exp(np.polyval(poly, np.log(fwhm)))
     return Qr_guess
 
@@ -89,11 +89,13 @@ def guess_a(f, z, z0, phi, amp):
     ix = np.argmax(ydiff)
     x = np.log10(ydiff[ix] / (fdiff[ix] / f0))
 
-    abin = [0.12775133, 0.20776996, 0.24230031, 0.27138029, 0.27180436,
-            0.28148386, 0.29764312, 0.44411039, 1.08299822, 1.65279296]
-    xbin = [-1.92091287, -1.71254739, -1.49205414, -1.26561494, -1.04146665,
-            -0.81335031, -0.58577596, -0.37463319, -0.09235512, -0.01371093]
+    abin = [0.1517482 , 0.20842793, 0.24274033, 0.2653973 , 0.28081431,
+        0.28519286, 0.29832441, 0.44475322, 0.81195896]
+    xbin = [-1.91936449, -1.71424342, -1.49362239, -1.26713098, -1.04040067,
+            -0.8144114 , -0.58510798, -0.3757271 , -0.14204129]
     a_guess = np.interp(x, xbin, abin)
+    if a_guess > 1:
+        a_guess = 1
     return a_guess
 
 def guess_fr(f, z, z0, phi, amp, a, Qr):
@@ -117,8 +119,8 @@ def guess_fr(f, z, z0, phi, amp, a, Qr):
     ix = np.argmax(zdiff)
     fr_guess = fdiff[ix]
     # Modification from nonlinearity parameter and Q
-    poly = [1.04085949, 5.08535056e-6]
-    fr_guess *= (np.polyval(poly, a / Qr) + 1)
+    poly = [1.12475270, 5.78740698e-6]
+    fr_guess *= np.polyval(poly, a / Qr) + 1
     return fr_guess
 
 def guess_phi_amp(z, z0):
@@ -132,7 +134,7 @@ def guess_phi_amp(z, z0):
     Returns:
     phi_guess (float): phi guess
     amp_guess (float): amp guess
-    """ 
+    """
     popt, _ = fitter.fit_iq_circle(z, plotq = False)
     xc, yc, R = popt
     # angle between center of circle and off resonance point

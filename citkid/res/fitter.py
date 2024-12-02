@@ -25,7 +25,7 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
     ffine (np.array): fine sweep frequency data
     zfine (np.array): fine sweep complex S21 data
     frs (list of float): resonance frequencies to cut from the gain scan
-    Qrs (list of float): spans of frs / Qrs are cut from the gain scan 
+    Qrs (list of float): spans of frs / Qrs are cut from the gain scan
     plotq (bool): If True, plots the fits.
     return_dataframe (bool): if True, returns the output of
         .data_io.make_fit_row instead of the separated data
@@ -115,9 +115,9 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     if bounds is None:
         # default bounds. Phi range is increased to avoid jumping at bounds
         #                 fr,  Qr, amp,              phi,    a,   i0,   q0,     tau
-        bounds = ([np.min(f), 1e3, .01,        -np.pi * 1.5, 0, -1e2, -1e2, -1.0e-6],
-                  [np.max(f), 1e7,   1 - 1e-6,  np.pi * 1.5, 2,  1e2,  1e2,  1.0e-6])
-    for index in [1, 5, 6]: # For Qr and z0, the initial guess should be good
+        bounds = ([np.min(f), 1e3, .01,        -np.pi / 2, 0, -1e2, -1e2, -1.0e-6],
+                  [np.max(f), 1e7,   1 - 1e-6,  np.pi / 2, 1,  1e2,  1e2,  1.0e-6])
+    for index in [1, 5, 6]:
         # These will be flipped in bounds_check if needed
         bounds[0][index] = p0[index] / 10
         bounds[1][index] = p0[index] * 10
