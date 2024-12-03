@@ -17,7 +17,7 @@ def guess_p0_nonlinear_iq(f, z):
         [fr, Qr, amp, phi, a, i0, q0, tau]
     """
     # guess i0 and q0
-    z0_guess = np.mean(np.concatenate([z[:2], z[-2:]]))
+    z0_guess = np.mean(np.roll(z, 2)[:4])
     i0_guess = np.real(z0_guess)
     q0_guess = np.imag(z0_guess)
     # guess tau
