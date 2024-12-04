@@ -87,7 +87,10 @@ def get_y(yg, a):
 def nonlinear_iq_for_fitter(f, fr, Qr, amp, phi, a, i0, q0, tau):
     """
     Same as nonlinear_iq, but returns stacked real and imaginary components
-    for the fitter.
+    for the fitter. The input data should be scaled as follows
+    fr X 100^6
+    Qr X 10^-4
+    tau * 1e6
     """
-    z = nonlinear_iq(f, fr, Qr, amp, phi, a, i0, q0, tau)
+    z = nonlinear_iq(f, fr / 100e-6, Qr / 1e-4, amp, phi, a, i0, q0, tau / 1e6)
     return np.hstack((np.real(z), np.imag(z)))

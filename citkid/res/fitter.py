@@ -207,6 +207,11 @@ def fit_util(p0, bounds, fit_tau, f, z_stacked, z):
     perr (np.array): fit parameter uncertainties
     res (float): fit residuals
     """
+    #             fr,   Qr, amp, phi, a, i0, q0, tau
+    scaler = [100e-6, 1e-4,   1,   1, 1,  1,  1, 1e6]
+    p0 = [p0i * s for p0i, s in zip(p0, scaler)]
+    bounds[0] = [bi * s for bi, s in zip(bounds[0], scaler)]
+    bounds[1] = [bi * s for bi, s in zip(bounds[1], scaler)]
     if not fit_tau:
         # Fit with tau enforced from p0[7]
         tau = p0[7]
@@ -225,6 +230,8 @@ def fit_util(p0, bounds, fit_tau, f, z_stacked, z):
                               p0, bounds = bounds)
 
         perr = np.sqrt(np.diag(pcov))
+    popt = [pi / s for pi, s in zip(popt, scaler)]
+    perr = [pi / s for pi, s in zip(perr, scaler)]
     z_fit = nonlinear_iq(f, *popt)
     res = calculate_residuals(z, z_fit)
     return popt, perr, res
