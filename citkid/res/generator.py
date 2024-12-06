@@ -5,7 +5,8 @@ from citkid.res.funcs import get_y
 '''Code to generate random resonances for simulations'''
 
 @jit(nopython=True)
-def make_random_resonance_data(get_noise = False, nnoise_points = 1000):
+def make_random_resonance_data(get_noise = False, nnoise_points = 1000,
+                                npoints_fine = 500, npoints_gain = 50):
     """
     Makes a dataset of a random resonator and returns the data with the actual
     resonator parameters
@@ -28,13 +29,13 @@ def make_random_resonance_data(get_noise = False, nnoise_points = 1000):
     fr, Qr = p[2], p[3]
     span = np.random.uniform(2, 100) * fr / Qr
     # Rough sweep
-    frough = np.linspace(fr - span / 2, fr + span / 2, 500)
+    frough = np.linspace(fr - span / 2, fr + span / 2, npoints_fine)
     zrough = get_resonance_s21(frough, *p)
     f0 = update_fr_distance(frough, zrough)
     # Fine sweep
-    ffine = np.linspace(f0 - span / 2, f0 + span / 2, 500)
+    ffine = np.linspace(f0 - span / 2, f0 + span / 2, npoints_fine)
     zfine = get_resonance_s21(ffine, *p)
-    fgain = np.linspace(f0 - 10 * span / 2, f0 + 10 * span / 2, 500)
+    fgain = np.linspace(f0 - 10 * span / 2, f0 + 10 * span / 2, npoints_gain)
     zgain = get_resonance_s21(fgain, *p)
     f0 = update_fr_distance(fgain, zgain)
     znoise = np.zeros(nnoise_points, dtype = np.complex64)

@@ -117,7 +117,7 @@ def cardan(a, b, c, d):
         # two stable real roots: return the max. The other solution is the min
         # max solution corresponds to a downward sweep. An upward sweep is more
         # complicated to calculate. It will stay at the min to a certain point,
-        # then jump to the max. See Swenson et al. 2013 for details 
+        # then jump to the max. See Swenson et al. 2013 for details
         return np.max(np.real(roots))
     else:
         # one real root: return value with smallest imaginary component
