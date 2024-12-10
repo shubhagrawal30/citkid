@@ -280,8 +280,8 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
     np.save(out_directory + f'ares_{file_suffix}.npy', ares_out)
     np.save(out_directory + f'fres_all_{file_suffix}.npy', fres_all)
     np.save(out_directory + f'qres_all_{file_suffix}.npy', qres_all)
-    np.save(out_directory + f'fcal_indices_{file_suffix}.npy', np.vectorize(int)(fcal_indices_out))
-    np.save(out_directory + f'res_indices_{file_suffix}.npy', np.vectorize(int)(res_indices_out))
+    np.save(out_directory + f'fcal_indices_{file_suffix}.npy', np.array(fcal_indices_out, dtype = int))
+    np.save(out_directory + f'res_indices_{file_suffix}.npy' , np.array(res_indices_out, dtype = int))
 
     if take_noise:
         np.save(out_directory + f'noise_{file_suffix}_00.npy', [np.real(znoise_out), np.imag(znoise_out)])
