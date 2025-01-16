@@ -4,7 +4,8 @@ from numba import jit, vectorize
 from scipy import signal
 
 # @jit(nopython=True)
-def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1):
+def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1,
+                  generate_noise = True):
     """
     Generates random resonance data. Assumes resonance frequencies were found
     from the point of max spacing. I can add other options if desired.
@@ -42,7 +43,10 @@ def generate_data(npoints_fine = 600, npoints_gain = 50, noise_factor = 1):
     zgain = nonlinear_iq_simple(f_noisy, fr, Qr, amp, phi, a, p_amp, p_phase)
     zgain *= np.random.normal(1, a_noise_std, len(zgain))
     # Noise data
-    znoise = generate_timestream(f0, fr, Qr, amp, phi, a, p_amp, p_phase)
+    if generate_noise:
+        znoise = generate_timestream(f0, fr, Qr, amp, phi, a, p_amp, p_phase)
+    else:
+        znoise = np.array([], dtype = complex)
     return ffine, zfine, fgain, zgain, f0, znoise
 
 @jit(nopython=True)
@@ -249,7 +253,7 @@ def polyval(p, x):
 ################################################################################
 ########################### Noise timestream ###################################
 ################################################################################
-def generate_timestream(fnoise, fr, Qr, amp, phi, a, p_amp, p_phase):
+def generate_timestream(fnoise, fr, Qr, amp, phi, a, p_amp, p_phase, tlen = 100):
     """
     Generates a raw IQ time stream, purely noise
 
@@ -264,19 +268,17 @@ def generate_timestream(fnoise, fr, Qr, amp, phi, a, p_amp, p_phase):
         a = 4 * sqrt(3) / 9 ~ 0.77.  Sometimes referred to as a_nl
     p_amp (array-like): gain polynomial coefficients
     p_phase (array-like): phase polynomial coefficients
+    tlen (float): timestream length in seconds
 
     Returns:
     z (np.array): IQ time series complex S21 data
     """
     # Sampling parameters
     fsample = 10000 # sampling frequency [Hz]
-    tlen = 100 # time stream length [s]
     # Sxx white and 1/f noise parameters
     sxx_white = 2e-17 # white noise term [1/Hz]
     fknee = 1 # knee of 1/f component [Hz]
-    # Cosmic-ray events
-    cr_peak_dx_vec = -1*np.array([1e-4, 2e-5])
-    cr_t0_vec = np.array([0.23, 0.58])*tlen
+
     # Roll-off tau
     tau_qp = 0.001 # qp lifetime [s]
     # Amplifier white and 1/f noise parameters
@@ -292,7 +294,9 @@ def generate_timestream(fnoise, fr, Qr, amp, phi, a, p_amp, p_phase):
     dx_noise += position
     #
     # Add some cosmic ray events
-    dx_cr = np.ones(fsample*tlen)*0
+    cr_peak_dx_vec = -1*np.array([1e-4, 2e-5])
+    cr_t0_vec = np.array([0.23, 0.58])*tlen
+    dx_cr = np.zeros(fsample*tlen)
     for ii in range(len(cr_t0_vec)):
         t0 = cr_t0_vec[ii]
         cr_peak_dx = cr_peak_dx_vec[ii]

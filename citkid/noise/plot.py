@@ -178,7 +178,7 @@ def plot_psd(f_psd, spar, sper, sxx, f_psd_offres, spar_offres, sper_offres):
         ax.set_xscale('log')
         ax.grid()
     ax0.set_xlabel('Frequency (Hz)')
-    ax0.set_ylabel(r'PSD (dBc)')
+    ax0.set_ylabel(r'PSD (dBc / Hz)')
     # Need to bin before plotting
     if spar_offres is not None:
         fbin, sparbin, sperbin = bin_psd(f_psd_offres, [f_psd_offres,

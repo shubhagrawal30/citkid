@@ -25,7 +25,7 @@ def update_fres(f, z, npoints, fcal_indices = [], method = 'mins21',
         sweep
 
     Returns:
-    fres (np.array): array of updated frequencies in Hz
+    fres_new (np.array): array of updated frequencies in Hz
     """
     if method == 'none':
         fres = []

@@ -109,8 +109,17 @@ def get_theta_vec(zfine_rmvd, plotq = False):
     z_offres = np.mean(np.concatenate([zfine_rmvd[:2], zfine_rmvd[-2:]]))
     ix = np.argmax(np.abs(zfine_rmvd - z_offres))
     z_onres = zfine_rmvd[ix]
-    # Get v, the direction between the origin of the circle and the on-res point
-    v = (z_onres - origin)
+    # Old method: set v to be the vector from the origin to the on-res point
+    # # Get v, the direction between the origin of the circle and the on-res point
+    # v = (z_onres - origin)
+    # v /= np.abs(v)
+    # Current method: set v such that the min theta point is at -pi
+    # This method avoids issues where the off-res data jumps at -pi or pi 
+    zmod = (zfine_rmvd - origin) 
+    zmod_rot = zmod[:len(zmod) // 10] * np.exp(-1j * zmod[0])
+    # Next, find the index of the smallest angle, and rotate it to -pi 
+    ix = np.argmax(np.angle(zmod_rot))
+    v = (zmod[ix]) * np.exp(-1j * np.pi)
     v /= np.abs(v)
     if plotq:
         ax = fig.axes[0]

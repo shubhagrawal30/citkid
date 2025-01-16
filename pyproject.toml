@@ -9,7 +9,7 @@ name = "citkid"
 version = "0.0"
 description = "Kinetic Inductance Detector data acquisition and analysis"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 license = {file = "LICENSE.txt"}
 keywords = ["kinetic inductance detector"]
 
