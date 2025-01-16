@@ -1,4 +1,6 @@
 import numpy as np
+from tqdm.auto import tqdm
+import pandas as pd
 from .plot import plot_gain_fit
 
 def fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, frs = [], Qrs = [],
@@ -118,3 +120,41 @@ def fit_gain(f, z, fr_spans, plotq = False):
     else:
         fig, axs = None, None
     return p_amp, p_phase, (fig, axs)
+
+def fit_gains(fs, zs, fr_spans, verbose=False):
+    """
+    Calls fit_gain() on arrays of frequency and gain data.
+    
+    Parameters:
+    fs <np.array>: gain frequency arrays
+    zs <np.array>: gain complex S21 arrays
+    fr_spans (list): values are tuples (<float>,<float>) where the first value
+        is the resonance frequency and the second is the span. These frequencies
+        are removed from the gain data
+    verbose (bool): If True, a progress bar is displayed.
+
+    Returns:
+    df_gain_fit (pd.DataFrame): Contains the fit data.
+    """
+    fr_spans = np.array(fr_spans)
+    fres = fr_spans.T[0]
+    pbar = range(len(fres))
+    if verbose:
+        pbar = tqdm(pbar, leave=False)
+    df_gain_fit = pd.DataFrame([])
+    for ires in pbar:
+        fgain = fs[ires]
+        zgain = zs[ires]
+        try:
+            p_amp, p_phase, (fig, axs) = \
+            fit_gain(fgain, zgain, fr_spans, plotq = False)
+        except:
+            p_amp = [np.nan]*3
+            p_phase = [np.nan]*2
+        row = pd.Series(dtype=float)
+        for ii in range(3):
+            row[f'p_amp{ii:02d}'] = p_amp[ii]
+        for ii in range(2):
+            row[f'p_phase{ii:02d}'] = p_phase[ii]
+        df_gain_fit = pd.concat([df_gain_fit.T, row], axis=1, ignore_index=True).T
+    return df_gain_fit
