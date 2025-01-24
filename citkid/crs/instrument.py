@@ -1,6 +1,3 @@
-# import sys
-# sys.path.append('/home/daq1/github/rfmux/')
-
 import os
 import rfmux
 import shutil
@@ -9,35 +6,24 @@ import subprocess
 import numpy as np
 from time import sleep
 from tqdm.auto import tqdm
-from .util import volts_to_dbm, remove_internal_phaseshift, convert_parser_to_z
-from .util import volts_per_roc
-from .util import find_key_and_index, convert_freq_to_nyq, convert_freq_from_nyq
-from hidfmux.core.utils.transferfunctions import apply_pfb_correction
-from hidfmux.core.utils import transferfunctions
-from hidfmux.analysis.noise_processing import separate_iq_fft_to_i_and_q
- 
+from .util import find_key_and_index, convert_parser_to_z
+
 class CRS:
-    def __init__(self, crs_sn = 27, splitter = True): 
+    def __init__(self, crs_sn = 27): 
         """ 
         Initializes the crs object d. Not that the system must be 
         configured using CRS.configure_system before measurements 
 
         Parameters:
         crs_sn (int): CRS serial number 
-        splitter (bool): If True, the splitter is attached. This is used to calculate
-            power
         """ 
         self.crs_sn = crs_sn
-        self.splitter = splitter
         s = rfmux.load_session('!HardwareMap [ !CRS { ' + f'serial: "{crs_sn:04d}"' + ' } ]')
         self.d = s.query(rfmux.CRS).one()
-        self.volts_per_roc = volts_per_roc
-        self.d.volts_per_roc = volts_per_roc
         self.nco_freq_dict = {}
-        print('Need to remove 2nd Nyquist zone conjugation with firmware update')
         
     async def configure_system(self, clock_source="SMA", full_scale_dbm = 1, analog_bank_high = False,
-                               nyquist_zones = {1: 1, 2: 1, 3: 1, 4: 1}, verbose = True):
+                               verbose = True):
         """
         Resolves the system, sets the timestamp port, sets the clock source, and sets the full scale
         in dBm 
@@ -47,8 +33,6 @@ class CRS:
             crystal oscillator or 'SMA' for the external 10 MHz reference (5 Vpp I think) 
         full_scale_dbm (int): full scale power in dBm. range is [???, 7?]
         analog_bank_high (bool): if True, uses modules 1-4 = DAC/ADC 5-8. Else uses modules 1-4 = DAC/ADC 1-4
-        nyquist_zones (dict): keys (int) are module indicies and values (int) are nyquist zone
-            numbers, 1 or 2
         verbose (bool): If True, gets and prints the clocking source 
         """
         await self.d.resolve()
@@ -59,14 +43,12 @@ class CRS:
         
         await self.d.set_clock_source(clock_source)
 
-        await self.d.set_analog_bank(high = analog_bank_high)
-        self.analog_bank_high = analog_bank_high
-        for module_index in range(1, 5):
+        await self.set_extended_module_bandwidth(False)
+        await self.set_analog_bank(analog_bank_high)
+        module_indices = range(5, 9) if analog_bank_high else range(1, 5)
+        for module_index in module_indices:
             await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
-            m = module_index
-            if self.analog_bank_high:
-                m += 4
-            await self.d.set_dac_scale(full_scale_dbm, self.d.UNITS.DBM, m)
+            await self.d.set_dac_scale(full_scale_dbm, self.d.UNITS.DBM, module_index)
         self.full_scale_dbm = full_scale_dbm
         self.d.full_scale_dbm = full_scale_dbm
                 
@@ -75,51 +57,46 @@ class CRS:
             print('System configured')
             print("Clocking source is", await self.d.get_clock_source())
 
-        await self.set_nyquist_zone(nyquist_zones)
-
-    async def set_nyquist_zone(self, nyquist_zones): 
+    async def set_analog_bank(self, analog_bank_high):
         """
-        Sets the Nyquist zone numbers
+        Sets the analog bank to either high (modules 5-8) or low (modules 1-4)
         
         Parameters:
-        nyquist_zones (dict): keys (int) are module indices and values (int) are Nyquist zone 
-            numbers, 1 or 2
+        analog_bank_high (bool): if True, uses modules 1-4 (DAC/ADC 5-8). Else uses modules 1-4 (DAC/ADC 1-4)
         """
-        if any([nz not in [1, 2] for nz in nyquist_zones.values()]):
-            raise ValueError('Nyquist zone must be in [1, 2]')
-        for module_index, zone in nyquist_zones.items():
-            await self.d.set_nyquist_zone(zone, module = module_index) 
-        self.nyquist_zones = nyquist_zones 
+        await self.d.set_analog_bank(high = analog_bank_high)
+        self.analog_bank_high = analog_bank_high
 
-        
+    async def set_extended_module_bandwidth(self, extended):
+        """
+        Choose between the standard module bandwidth of 250 MHz and the extended module 
+        bandwidth of 300 MHz. Only extend the bandwidth if you know what you are doing.
+        See docstring for crs.d.set_extended_module_bandwidth for details
+
+        Parameters:
+            extended (bool): If True, extends the bandwidth. 
+        """
+        await self.d.set_extended_module_bandwidth(extended)
+        self.extended_bw = extended
+        if extended:
+            warnings.warn(f"Extended module bandwidth set", UserWarning)
+
+    
     async def set_nco(self, nco_freq_dict, verbose = True):
         """Set the NCO frequency
         
         Parameters:
-        module (int): module index
         nco_freq_dict (dict): keys (int) are module indices and values (float) are 
             NCO frequencies in Hz. These should not be round numbers
         verbose (bool): If True, gets and prints the NCO frequencies
         """
         modules = list(nco_freq_dict.keys())
-        if any([m not in [1,2,3,4] for m in modules]):
-            raise ValueError(f'modules must be in range [1, 4]')
-        nco_freq_dict = {key: convert_freq_to_nyq(value, self.nyquist_zones[key]) for key, value in nco_freq_dict.items()}
-        if any([nco > 2.5e9 - 312.5e6 for nco in nco_freq_dict.values()]):
-            raise ValueError('NCOs must be less than 2.175 GHz to avoid Nyquist reflections')
-        modules = list(nco_freq_dict.keys())
-        await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).set_nco(nco_freq_dict, 
-                self.analog_bank_high)
-        for key, value in nco_freq_dict.items(): 
-            if self.analog_bank_high:
-                i = 4 
-            else:
-                i = 0
-            nco = await self.d.get_nco_frequency(self.d.UNITS.HZ, module = key + i)
-            nco = convert_freq_from_nyq(nco, self.nyquist_zones[key])
-            self.nco_freq_dict[key] = nco
+        await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).set_nco(nco_freq_dict)
+        for module_index, nco_set in nco_freq_dict.items(): 
+            nco_meas = await self.d.get_nco_frequency(module = module_index)
+            self.nco_freq_dict[module_index] = nco_meas
             if verbose:
-                print(f'Module {key} NCO is {round(nco * 1e-6, 6)} MHz') 
+                print(f'Module {module_index} NCO is {round(nco_meas * 1e-6, 6)} MHz') 
         
     async def write_tones(self, fres, ares):
         """
@@ -146,12 +123,16 @@ class CRS:
         self.ares_dict = {key: np.array(value) for key, value in self.ares_dict.items()}
         self.ch_ix_dict = {key: np.array(value) for key, value in self.ch_ix_dict.items()}
         for module_index in self.nco_freq_dict.keys():
-            if any(np.abs(self.fres_dict[module_index] - self.nco_freq_dict[module_index]) > 312.5e6):
-                raise ValueError('All of fres must be within12.5 MHz of an NCO frequency') 
+            if self.extended_bw:
+                bw_half = 312.5e6 
+            else:
+                bw_half = 250e6
+            if any(np.abs(self.fres_dict[module_index] - self.nco_freq_dict[module_index]) > bw_half):
+                raise ValueError(f'All of fres must be within {round(bw_half / 1e6, 1)} MHz of an NCO frequency') 
         # Write tones 
         modules = list(self.fres_dict.keys())
         await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).write_tones(self.nco_freq_dict, self.fres_dict, 
-                                                                                         self.ares_dict, self.nyquist_zones)
+                                                                                         self.ares_dict)
 
     async def sweep(self, frequencies, ares, return_raw = False, nsamps = 10, verbose = True, pbar_description = 'Sweeping'):
         """
@@ -184,40 +165,34 @@ class CRS:
         self.ares_dict = {key: np.array(value) for key, value in self.ares_dict.items()}
         self.ch_ix_dict = {key: np.array(value) for key, value in self.ch_ix_dict.items()}
         for module_index in self.nco_freq_dict.keys():
-            if any(np.abs(self.frequencies_dict[module_index] - self.nco_freq_dict[module_index]).flatten() > 312.5e6):
-                raise ValueError('All of frequencies must be within 312.5 MHz of an NCO frequency') 
+            if self.extended_bw:
+                bw_half = 312.5e6 
+            else:
+                bw_half = 250e6
+            if any(np.abs(self.frequencies_dict[module_index] - self.nco_freq_dict[module_index]).flatten() > bw_half):
+                raise ValueError(f'All of frequencies must be within {round(bw_half / 1e6, 1)} MHz of an NCO frequency')
                 
         # Set fir_stage
         fir_stage = 6 
         await self.d.set_fir_stage(fir_stage) 
         # Sweep 
         modules = list(self.frequencies_dict.keys())
-        sweep_f, sweep_z, sweep_zraw, sweep_zcal = {}, {}, {}, {}
+        sweep_f, sweep_z = {}, {}
         await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).sweep(self.nco_freq_dict, self.frequencies_dict, self.ares_dict, 
-                                                                                   sweep_f, sweep_z, self.nyquist_zones, sweep_zraw = sweep_zraw, 
-                                                                                   sweep_zcal = sweep_zcal,
-                                                                                   nsamps = nsamps, verbose = verbose, 
+                                                                                   sweep_f, sweep_z, nsamps = nsamps, verbose = verbose, 
                                                                                    pbar_description = pbar_description)
         # Create f, z from sweep results 
         nres = frequencies.shape[0]
         f = np.empty(frequencies.shape, dtype = float)
         z = np.empty(frequencies.shape, dtype = complex)
-        zraw = np.empty(frequencies.shape, dtype = complex)
-        zcal = np.empty(frequencies.shape, dtype = complex)
         for res_index in range(nres):
             module_index, ch_index = find_key_and_index(self.ch_ix_dict, res_index) 
             f[res_index] = sweep_f[module_index][ch_index]
             z[res_index] = sweep_z[module_index][ch_index]
-            zraw[res_index] = sweep_zraw[module_index][ch_index]
-            zcal[res_index] = sweep_zcal[module_index][ch_index]
         z /= 10 ** (ares[:, np.newaxis] / 20)
-        if self.splitter:
-            z /= 10 ** (-10.5 * 2 / 20) # 10.5 dB loss in either direction 
-        if return_raw:
-            return f, z, zraw, zcal 
         return f, z
 
-    async def sweep_linear(self, fres, ares, bw = 20e3, npoints = 10, return_raw = False,
+    async def sweep_linear(self, fres, ares, bw = 20e3, npoints = 10,
                            nsamps = 10, verbose = True, pbar_description = 'Sweeping'):
         """
         Performs a frequency sweep where each channel is swept over the same range in 
@@ -239,13 +214,11 @@ class CRS:
         """ 
         fres, ares = np.asarray(fres), np.asarray(ares)
         f = np.linspace(fres + bw / 2, fres - bw / 2, npoints).T
-        f, z, zraw, zcal = await self.sweep(f, ares, nsamps = nsamps, return_raw = True,
-                            verbose = verbose, pbar_description = pbar_description)
-        if return_raw:
-            return f, z, zraw, zcal 
+        f, z = await self.sweep(f, ares, nsamps = nsamps, verbose = verbose, 
+                                pbar_description = pbar_description)
         return f, z
 
-    async def sweep_qres(self, fres, ares, qres, npoints = 10, nsamps = 10, return_raw = False,
+    async def sweep_qres(self, fres, ares, qres, npoints = 10, nsamps = 10, 
                          verbose = True, pbar_description = 'Sweeping'):
         """
         Performs a frequency sweep where the span around each frequency is set 
@@ -267,13 +240,11 @@ class CRS:
         fres, ares, qres = np.asarray(fres), np.asarray(ares), np.asarray(qres)
         spans = fres / qres 
         f = np.linspace(fres + spans / 2, fres - spans / 2, npoints).T
-        f, z, zraw, zcal = await self.sweep(f, ares, nsamps = nsamps, return_raw = True,
-                            verbose = verbose, pbar_description = pbar_description)
-        if return_raw:
-            return f, z, zraw, zcal 
+        f, z = await self.sweep(f, ares, nsamps = nsamps, verbose = verbose, 
+                                pbar_description = pbar_description) 
         return f, z
 
-    async def sweep_full(self, amplitude, npoints = 10, return_raw = False,
+    async def sweep_full(self, amplitude, npoints = 10, 
                          nsamps = 10, verbose = True, pbar_description = 'Sweeping'):
         """
         Performs a frequency sweep over the full 600 MHz bandwidth around the NCO 
@@ -288,20 +259,15 @@ class CRS:
         z (np.array): array of complex S21 data corresponding to f 
         """ 
         ncos = list(self.nco_freq_dict.values())
-        bw = 600e6 / 1024 + 200
+        bw = 500e6 / 1024 + 200
         spacing = bw / npoints 
-        fres = np.concatenate([np.linspace(nco - 300e6 + 10 + bw, nco + 300e6 - 10 - bw, 1024) for nco in ncos])
+        fres = np.concatenate([np.linspace(nco - 250e6 + 10 + bw, nco + 250e6 - 10 - bw, 1024) for nco in ncos])
         ares = amplitude * np.ones(len(fres))
-        f, z, zraw, zcal = await self.sweep_linear(fres, ares, bw = bw - spacing, npoints = npoints, return_raw = True,
-                                      nsamps = nsamps, verbose = verbose, 
-                                      pbar_description = pbar_description)
+        f, z = await self.sweep_linear(fres, ares, bw = bw - spacing, npoints = npoints, nsamps = nsamps, 
+                                       verbose = verbose, pbar_description = pbar_description)
         f, z = f.flatten(), z.flatten()
-        zraw, zcal = zraw.flatten(), zcal.flatten()
         ix = np.argsort(f)
         f, z = f[ix], z[ix]
-        zraw, zcal = zraw[ix], zcal[ix]
-        if return_raw:
-            return f, z, zraw, zcal 
         return f, z
 
     async def capture_fast_noise(self, frequency, amplitude, time, verbose = False):
@@ -319,6 +285,7 @@ class CRS:
         nsamps (int): number of samples. Max is 1e6
         verbose (bool): if True, prints NCO frequency settings 
         """
+        raise Exception('Not updated yet')
         module_index = min(self.nco_freq_dict, key = lambda k: np.abs(self.nco_freq_dict[k] - frequency)) 
         if self.nyquist_zones[module_index] != 1:
             raise Exception('This is not set up for the second nyquist zone')
@@ -336,13 +303,14 @@ class CRS:
         nco_freq_dict_temp = {module_index: nco_freq0 + center_offset_freq}
         await self.sz_noise_dict.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
         sleep(1)
-        pfb_samples = await self.d.get_pfb_samples(int(nsamps), 'RAW', 1, module_index) # May have 20% exact difference 
-        pfb_samples = np.array([complex(*sample) for sample in pfb_samples])
+        pfb_samples = await self.d.get_pfb_samples(int(nsamps), channel = 1, module = module_index) # May have 20% exact difference 
+        pfb_samples = np.array([complex(sample.i) for sample in pfb_samples]) 
+        raise Exception("Haven't sorted out changes yet")
         await self.d.set_dmfd_routing(self.d.ROUTING.CARRIER, module_index)
         
         fraw, fft_corr_raw, builtin_gain_factor, pfb_sample_len =\
             apply_pfb_correction(pfb_samples, self.nco_freq_dict[module_index], frequency, binlim = 1.1e6, trim=True)
-        cal_samples = await self.d.get_pfb_samples(2100, 'RAW', 1, module_index)
+        cal_samples = await self.d.get_pfb_samples(2100, channel = 1, module = module_index)
         await self.d.set_dmfd_routing(self.d.ROUTING.ADC, module_index)
         cal_samples = np.array([complex(*sample) for sample in cal_samples][100:])
         fcal, fft_corr_cal, builtin_gain_factor_cal, pfb_sample_len_cal =\
@@ -355,7 +323,7 @@ class CRS:
         zcal = np.mean(zcal)
 
         # Max of nsamps is 1e5 
-        z = remove_internal_phaseshift(frequency, zraw, zcal) * self.volts_per_roc
+        z = remove_internal_phaseshift(frequency, zraw, zcal) * rfmux.core.utils.transferfunctions.VOLTS_PER_ROC / np.sqrt(2)
         # Adjust NCO back to its original value 
         nco_freq_dict_temp = {module_index: nco_freq0}
         self.set_nco(nco_freq_dict_temp, verbose = verbose)
@@ -363,9 +331,9 @@ class CRS:
         return fraw, z
 
     async def capture_noise(self, fres, ares, noise_time, fir_stage = 6,
-                            parser_loc='/home/daq1/github/citkid/citkid/crs/parser',
+                            parser_loc='/home/daq1/github/rfmux/firmware/r1.5.5/parser',
                             interface='enp2s0', delete_parser_data = False,
-                            verbose = True, return_raw = False):
+                            verbose = True):
         """
         Captures a noise timestream using the parser.
         
@@ -390,7 +358,6 @@ class CRS:
         zraw (M X N np.array): raw data before applying the calibration 
         """
         module_indices = list(self.nco_freq_dict.keys()) 
-        modules = [self.d.modules[module_index - 1] for module_index in module_indices] 
         if fir_stage <= 4:
             warnings.warn(f"packets will drop if fir_stage < 5", UserWarning)
         fres, ares = np.asarray(fres), np.asarray(ares) 
@@ -408,13 +375,6 @@ class CRS:
         # set the tones
         await self.write_tones(fres, ares)
         sleep(1)
-        # Get the calibration data 
-        noise_zcal_dict = {}
-        modules = list(self.ch_ix_dict.keys())
-        await self.d.modules.filter(rfmux.ReadoutModule.module.in_(modules)).get_noise_cal(self.fres_dict, noise_zcal_dict)
-        sleep(0.1)
-        # sleep(10)
-        # raise Exception('Make this sleep statement longer')
         # Collect the data 
         num_samps = int(self.sample_frequency*(noise_time + 10))
         parser = subprocess.Popen([parser_loc, '-d', data_path, '-i', interface, '-s', 
@@ -428,32 +388,18 @@ class CRS:
         # Set fir stage back
         await self.d.set_fir_stage(6)
         # read the data and convert to z 
-        nres = len(fres)
-        z = [[]] * nres
-        zraw = [[]] * nres 
-        zcal = [[]] * nres 
+        z = [[]] * len(fres)
         for module_index in module_indices:
-            zrawi = convert_parser_to_z(data_path, self.crs_sn, module_index, ntones = len(self.ch_ix_dict[module_index])) 
+            zi = convert_parser_to_z(data_path, self.crs_sn, module_index, ntones = len(self.ch_ix_dict[module_index])) 
             fres0 = self.fres_dict[module_index].copy()
-            fres0 = convert_freq_to_nyq(fres0, self.nyquist_zones[module_index])
-            zi = remove_internal_phaseshift(fres0[:, np.newaxis], zrawi, noise_zcal_dict[module_index][:, np.newaxis], self.nyquist_zones[module_index])
             for index, ch_index in enumerate(self.ch_ix_dict[module_index]):
                 z[ch_index] = zi[index]
-                zraw[ch_index] = zrawi[index]
-                zcal[ch_index] = noise_zcal_dict[module_index][index] 
         # Sometimes the number of points is not exact
         data_len = min([len(zi) for zi in z]) 
         z = np.array([zi[:data_len] for zi in z])
-        zraw = np.array([zi[:data_len] for zi in zraw])
         if delete_parser_data:
             shutil.rmtree('tmp/')
-        if self.nyquist_zones[module_index] == 2:
-            z = np.conjugate(z)
         z /= 10 ** (ares[:, np.newaxis] / 20)
-        if self.splitter:
-            z /= 10 ** (-10.5 * 2 / 20) 
-        if return_raw:
-            return z, zcal, zraw 
         return z
     
 ######################################################################################################
@@ -461,7 +407,7 @@ class CRS:
 ######################################################################################################
 
 @rfmux.macro(rfmux.ReadoutModule, register=True)
-async def set_nco(module, nco_freq_dict, analog_bank_high):
+async def set_nco(module, nco_freq_dict):
         """Set the NCO frequency
         
         Parameters:
@@ -472,12 +418,10 @@ async def set_nco(module, nco_freq_dict, analog_bank_high):
         d = module.crs
         module_index = module.module
         nco_freq = nco_freq_dict[module_index] 
-        if analog_bank_high:
-            module_index += 4
-        await d.set_nco_frequency(nco_freq, d.UNITS.HZ, module = module_index)
+        await d.set_nco_frequency(nco_freq, module = module_index)
 
 @rfmux.macro(rfmux.ReadoutModule, register=True)
-async def write_tones(module, nco_freq_dict, fres_dict, ares_dict, nyquist_zones):
+async def write_tones(module, nco_freq_dict, fres_dict, ares_dict):
         """
         Writes an array of tones given frequencies and amplitudes 
 
@@ -496,15 +440,16 @@ async def write_tones(module, nco_freq_dict, fres_dict, ares_dict, nyquist_zones
         fres, ares = fres_dict[module_index], ares_dict[module_index]
         fres = np.asarray(fres) 
         ares = np.asarray(ares)
-        # Randomize frequencies a little
-        fres += np.random.uniform(-50, 50, fres.shape)
-        comb_sampling_freq = transferfunctions.get_comb_sampling_freq()
+        # Randomize frequencies a little. This might be unneccesary but I kept it in to be safe
+        ix = [i for i in range(len(fres)) if i not in [np.argmin(fres), np.argmax(fres)]]
+        # don't randomize lowest and highest frequency to avoid exceeding bandwidth
+        fres[ix] += np.random.uniform(-50, 50, len(fres) - 2)
+        comb_sampling_freq =rfmux.core.utils.transferfunctions.COMB_SAMPLING_FREQ
         threshold = 101.
         fres[fres%(comb_sampling_freq/512) < threshold] += threshold
         # Check NCO and input parameters
         try:
             nco = nco_freq_dict[module_index]
-            nco_nyq = convert_freq_from_nyq(nco, nyquist_zones[module_index])
         except:
             raise Exception('NCO frequency has not been set')
         if any(ares > d.full_scale_dbm):
@@ -515,19 +460,15 @@ async def write_tones(module, nco_freq_dict, fres_dict, ares_dict, nyquist_zones
         
         await d.clear_channels(module = module_index)
         
-        fres_nyq = convert_freq_to_nyq(fres, nyquist_zones[module_index],  
-                                       adc_sampling_rate=5e9)
         async with d.tuber_context() as ctx:
-            for ch, (fr, ar) in enumerate(zip(fres_nyq, ares_amplitude)):
-                ## To be wrapped in context_manager 
-                ctx.set_frequency(fr - nco_nyq, d.UNITS.HZ, ch + 1, module=module_index)
-                ctx.set_amplitude(ar, d.UNITS.NORMALIZED, target = d.TARGET.DAC, channel=ch+1, 
-                                  module=module_index)
+            for ch, (fr, ar) in enumerate(zip(fres, ares_amplitude)):
+                ctx.set_frequency(fr - nco, channel = ch + 1, module = module_index)
+                ctx.set_amplitude(ar, channel = ch+1, module = module_index)
             await ctx()
 
 @rfmux.macro(rfmux.ReadoutModule, register=True)
-async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, sweep_z, nyquist_zones, 
-                sweep_zraw = None, sweep_zcal = None, nsamps = 10, verbose = True, pbar_description = 'Sweeping'):
+async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, sweep_z, 
+                nsamps = 10, verbose = True, pbar_description = 'Sweeping'):
         """
         Performs a frequency sweep and returns the complex S21 value at each frequency. Performs sweeps over 
         axis 0 of frequencies simultaneously 
@@ -550,11 +491,6 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, swe
         d = module.crs
         module_index = module.module  
         frequencies, ares = np.asarray(frequencies_dict[module_index]), np.asarray(ares_dict[module_index])
-        # Randomize frequencies a little
-        frequencies += np.random.uniform(-50, 50, frequencies.shape)
-        comb_sampling_freq = transferfunctions.get_comb_sampling_freq()
-        threshold = 101.
-        frequencies[frequencies%(comb_sampling_freq/512) < threshold] += threshold
 
         if not len(frequencies):
             return np.array([], dtype = float), np.array([], dtype = complex)
@@ -565,74 +501,31 @@ async def sweep(module, nco_freq_dict, frequencies_dict, ares_dict, sweep_f, swe
 
         # Write amplitudes 
         fres_dict = {module_index: [fi[0] for fi in frequencies]}
-        await module.write_tones(nco_freq_dict, fres_dict, ares_dict, nyquist_zones)
+        await module.write_tones(nco_freq_dict, fres_dict, ares_dict)
         # Initialize z array 
         z = np.empty((n_channels, n_points), dtype = complex)
-        zcal = np.empty((n_channels, n_points), dtype = complex) 
-        zraw = np.empty((n_channels, n_points), dtype = complex)
 
         pbar = range(n_points) 
         if verbose:
             pbar = tqdm(pbar, total = n_points, leave = False)
             pbar.set_description(pbar_description)
-        
-        frequencies_nyq = convert_freq_to_nyq(frequencies, nyquist_zones[module_index], 
-                        adc_sampling_rate=5e9)
-        nco_freq_nyq = convert_freq_to_nyq(nco_freq, nyquist_zones[module_index])
+
         for sweep_index in pbar:
             # Write frequencies 
             async with d.tuber_context() as ctx:
                 for ch in range(n_channels):
-                    f = frequencies_nyq[ch, sweep_index]
-                    ctx.set_frequency(f - nco_freq_nyq, d.UNITS.HZ, ch + 1, module = module_index)
+                    f = frequencies[ch, sweep_index]
+                    ctx.set_frequency(f - nco_freq, channel = ch + 1, module = module_index)
                 await ctx()
             nsamples_discard = 0 # 15
-            # take data and loopback calibration data
-            await d.set_dmfd_routing(d.ROUTING.CARRIER, module_index)
-            sleep(0.5)
-            samples_cal = await d.py_get_samples(20 + nsamples_discard, module = module_index )
-            await d.set_dmfd_routing(d.ROUTING.ADC, module_index)
-            sleep(0.5)
-            samples = await d.py_get_samples(nsamps + nsamples_discard,module = module_index)
+            samples = await d.py_get_samples(nsamps + nsamples_discard, module = module_index,
+                                             average = True)
             # format and average data 
-            zi = np.asarray(samples.i) + 1j * np.asarray(samples.q)
-            zi = np.mean(zi[:n_channels, nsamples_discard:] , axis = 1)
-            zical = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-            zical = np.mean(zical[:n_channels, nsamples_discard:], axis = 1)  
-            # adjust for loopback calibration
-            zcal[:, sweep_index] = zical 
-            zraw[:, sweep_index] = zi * d.volts_per_roc 
-            zi = remove_internal_phaseshift(frequencies_nyq[:, sweep_index], zi, zical, nyquist_zones[module_index]) 
-            z[:, sweep_index] = zi * d.volts_per_roc 
-        if nyquist_zones[module_index] == 2:
-            z = np.conjugate(z)
+            zi = np.asarray(samples.mean.i) + 1j * np.asarray(samples.mean.q)
+            zi = zi[:n_channels]
+            z[:, sweep_index] = zi * rfmux.core.utils.transferfunctions.VOLTS_PER_ROC / np.sqrt(2)
+
         # Turn off channels 
         await d.clear_channels(module = module_index)
-        sweep_f[module_index] = convert_freq_from_nyq(frequencies_nyq, nyquist_zones[module_index])
+        sweep_f[module_index] = frequencies
         sweep_z[module_index] = z
-        if sweep_zraw is not None:
-            sweep_zraw[module_index] = zraw 
-            sweep_zcal[module_index] = zcal 
-
-@rfmux.macro(rfmux.ReadoutModule, register=True) 
-async def get_noise_cal(module, fres_dict, noise_zcal_dict):
-    """
-    Acquires noise calibration data 
-
-    Parameters:
-    module (rfmux.ReadoutModule): readout module object
-    fres_dict (dict): keys (int) are module indices and values (array-like) are 
-        frequencies in Hz 
-    """
-    d = module.crs
-    module_index = module.module 
-    fres = np.asarray(fres_dict[module_index])
-    # Get calibration data
-    nsamples_discard = 0
-    await d.set_dmfd_routing(d.ROUTING.CARRIER, module_index) 
-    samples_cal = await d.py_get_samples(20 + nsamples_discard, module = module_index)
-    zcal = np.asarray(samples_cal.i) + 1j * np.asarray(samples_cal.q) 
-    zcal = np.mean(zcal[:len(fres), nsamples_discard:], axis = 1)
-    await d.set_dmfd_routing(d.ROUTING.ADC, module_index)
-    np.save(f'tmp/zcal_{module_index}.npy', [np.real(zcal), np.imag(zcal)]) # Save in case it crashes
-    noise_zcal_dict[module_index] = zcal 
