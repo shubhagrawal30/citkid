@@ -36,7 +36,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
         in the IQ loops
     fine_bw (float): fine sweep bandwidth in Hz. Gain bandwidth is 10 X fine
         bandwidth
-    npoints_noisefreq_update (int): Number of points around the center of the fine sweep that 
+    npoints_noisefreq_update (int): Number of points around the center of the fine sweep that
         are used to update frequencies before taking noise, or None to bypass updating
     rough_bw (float): rough sweep bandwidth in Hz
     npoints_fine (int): number of points per resonator in the fine sweep
@@ -105,10 +105,10 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
     if npoints_noisefreq_update is not None:
         ix0, ix1 = npoints_fine // 2 - npoints_noisefreq_update // 2, npoints_fine // 2 + npoints_noisefreq_update // 2 + npoints_noisefreq_update % 2
-        f0 = [fi[ix0: ix1] for fi in f] 
+        f0 = [fi[ix0: ix1] for fi in f]
         z0 = [zi[ix0: ix1] for zi in z]
         fres = update_fres(f0, z0, fres, spans, fcal_indices, method = 'spacing', cable_delay = cable_delay)
-    np.save(out_directory + f'fres_noise{file_suffix}.npy', fres) 
+    np.save(out_directory + f'fres_noise{file_suffix}.npy', fres)
 
     # Noise
     if take_noise:
@@ -122,7 +122,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
         np.save(out_directory + filename, 1 / fsample_noise)
 
     if take_fast_noise:
-        pbar = range(len(fres)) 
+        pbar = range(len(fres))
         if verbose:
             pbar = tqdm(pbar, total = len(fres), leave = False)
             pbar.set_description('Fast noise index')
@@ -134,7 +134,7 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
                 np.save(out_directory + filename, [fraw, np.real(z), np.imag(z)])
 
 
-async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, fcal_indices, res_indices, 
+async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, fcal_indices, res_indices,
                                    out_directory, file_suffix,
                   noise_time = 200, take_noise = False, gain_span_factor = 10, npoints_noisefreq_update = None,
                   npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
@@ -147,7 +147,7 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
     Parameters:
     inst (multitone instrument): initialized multitone instrument class, with
         'sweep', 'write_tones', and 'capture_noise' methods
-    ncos (array-like): nco frequencies in Hz 
+    ncos (array-like): nco frequencies in Hz
     fres (np.array): array of resonance frequencies in Hz
     ares (np.array): array of amplitudes in RFSoC units
     qres (np.array): array of span factors for cutting out of adjacent datasets.
@@ -160,7 +160,7 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
         in the IQ loops
     fine_bw (float): fine sweep bandwidth in Hz. Gain bandwidth is 10 X fine
         bandwidth
-    npoints_noisefreq_update (int): Number of points around the center of the fine sweep that 
+    npoints_noisefreq_update (int): Number of points around the center of the fine sweep that
         are used to update frequencies before taking noise, or None to bypass updating
     rough_bw (float): rough sweep bandwidth in Hz
     npoints_fine (int): number of points per resonator in the fine sweep
@@ -180,16 +180,16 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
     fres_all (array-like): list of all frequencies for analysis, if fres is
         incomplete
     qres_all (array-like): array of span factors corresponding to fres_all
-    nco_indices_to_skip (list): list of NCO indices to skip data acquisition. Use this when 
-        the code failed partway through. take_iq_noise must have finished running for the 
+    nco_indices_to_skip (list): list of NCO indices to skip data acquisition. Use this when
+        the code failed partway through. take_iq_noise must have finished running for the
         indices that are skipped. The function will import the data instead of taking and
         overwriting it
-    """ 
+    """
     if take_fast_noise:
         raise Exception('Fast noise not yet implemented for sequential')
-    ix = np.argsort(fres) 
-    fres, ares, qres = fres[ix], ares[ix], qres[ix] 
-    res_indices = res_indices[ix] 
+    ix = np.argsort(fres)
+    fres, ares, qres = fres[ix], ares[ix], qres[ix]
+    res_indices = res_indices[ix]
     fcal_indices = ix[fcal_indices]
     ncos = np.asarray(ncos)
     ixs = {index: [] for index in range(len(ncos))}
@@ -198,21 +198,21 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
         ixs[nco_index].append(di)
 
     fres_initial_out, fres_out = np.empty(fres.size, dtype = float), np.empty(fres.size, dtype = float)
-    ares_out, qres_out = np.empty(fres.size, dtype = float), np.empty(fres.size, dtype = float) 
-    fcal_indices_out = fcal_indices.copy() 
-    res_indices_out = np.empty(fres.size, dtype = int) 
+    ares_out, qres_out = np.empty(fres.size, dtype = float), np.empty(fres.size, dtype = float)
+    fcal_indices_out = fcal_indices.copy()
+    res_indices_out = np.empty(fres.size, dtype = int)
     if take_rough_sweep:
         frough_out, zrough_out = np.empty((len(fres), npoints_rough), dtype = float), np.empty((len(fres), npoints_rough), dtype = complex)
     else:
-        frough_out, zrough_out = None, None 
+        frough_out, zrough_out = None, None
     ffine_out, zfine_out = np.empty((len(fres), npoints_fine), dtype = float), np.empty((len(fres), npoints_fine), dtype = complex)
     fgain_out, zgain_out = np.empty((len(fres), npoints_gain), dtype = float), np.empty((len(fres), npoints_gain), dtype = complex)
     nco_indices_out = np.empty(len(fres), dtype = int)
     fcal_indices_all = []
     if take_noise:
-        fres_noise_out = np.empty(len(fres), dtype = float) 
-        znoise_out = None 
-    pbar = ncos 
+        fres_noise_out = np.empty(len(fres), dtype = float)
+        znoise_out = None
+    pbar = ncos
     if verbose:
         pbar = tqdm(pbar, leave = False)
     for nco_index, nco in enumerate(pbar):
@@ -222,58 +222,58 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
         ix = ixs[nco_index]
         for di in ix:
             nco_indices_out[di] = nco_index
-        fres0 = fres[ix] 
-        qres0 = qres[ix] 
-        ares0 = ares[ix] 
-        fcal_indices0 = [fc - min(ix) for fc in fcal_indices if fc in ix] 
-        res_indices0 = res_indices[ix] 
+        fres0 = fres[ix]
+        qres0 = qres[ix]
+        ares0 = ares[ix]
+        fcal_indices0 = [fc - min(ix) for fc in fcal_indices if fc in ix]
+        res_indices0 = res_indices[ix]
         await inst.set_nco({module_index: nco})
         if nco_index not in nco_indices_to_skip:
             await take_iq_noise(inst, fres0, ares0, qres0, fcal_indices0, res_indices0, out_directory, file_suffix0,
-                    noise_time = noise_time, take_noise = take_noise, gain_span_factor = gain_span_factor, 
+                    noise_time = noise_time, take_noise = take_noise, gain_span_factor = gain_span_factor,
                     npoints_noisefreq_update = npoints_noisefreq_update, cable_delay = cable_delay,
-                    npoints_fine = npoints_fine, npoints_gain = npoints_gain, npoints_rough = npoints_rough, 
-                    nsamps = nsamps, take_rough_sweep = take_rough_sweep, fres_update_method = fres_update_method, 
-                    fir_stage = fir_stage, fres_all = fres_all, qres_all = qres_all, verbose = verbose, 
+                    npoints_fine = npoints_fine, npoints_gain = npoints_gain, npoints_rough = npoints_rough,
+                    nsamps = nsamps, take_rough_sweep = take_rough_sweep, fres_update_method = fres_update_method,
+                    fir_stage = fir_stage, fres_all = fres_all, qres_all = qres_all, verbose = verbose,
                     take_fast_noise = take_fast_noise, fast_noise_time = fast_noise_time, n_fast_noise = n_fast_noise)
-        
+
         fres_initial0, fres_out[ix], ares_out[ix], qres_out[ix], fcal_indices0, fres_all0, qres_all0, \
             frough0, zrough0, fgain_out[ix], zgain_out[ix], ffine_out[ix], \
             zfine_out[ix], znoise0, noise_dt, res_indices_out[ix], fres_noise0 =\
-        import_iq_noise(out_directory, file_suffix0, import_noiseq = take_noise) 
+        import_iq_noise(out_directory, file_suffix0, import_noiseq = take_noise)
         fcal_indices_all.append([fc + min(ix) for fc in fcal_indices0])
         if take_rough_sweep:
             fres_initial_out[ix] = fres_initial0
-            frough_out[ix] = frough0 
-            zrough_out[ix] = zrough0 
+            frough_out[ix] = frough0
+            zrough_out[ix] = zrough0
         if take_noise:
             fres_noise_out[ix] = fres_noise0
             if znoise_out is None:
                 znoise_out = np.empty((len(fres), znoise0.shape[1]), dtype = complex)
             elif znoise_out.shape[1] < znoise0.shape[1]:
-                znoise0 = znoise0[:, :znoise_out.shape[1]] 
+                znoise0 = znoise0[:, :znoise_out.shape[1]]
             elif znoise_out.shape[1] > znoise0.shape[1]:
-                znoise_out = znoise_out[:, :znoise0.shape[1]] 
+                znoise_out = znoise_out[:, :znoise0.shape[1]]
             znoise_out[ix] = znoise0
     if take_rough_sweep:
-        np.save(out_directory + f's21_rough_{file_suffix}.npy', 
-                [frough_out, np.real(zrough_out), np.imag(zrough_out)]) 
+        np.save(out_directory + f's21_rough_{file_suffix}.npy',
+                [frough_out, np.real(zrough_out), np.imag(zrough_out)])
         np.save(out_directory + f'fres_initial_{file_suffix}.npy', fres_initial_out)
     np.save(out_directory + f'NCO_indices_{file_suffix}.npy', nco_indices_out)
-    np.save(out_directory + f's21_fine_{file_suffix}.npy', 
+    np.save(out_directory + f's21_fine_{file_suffix}.npy',
                 [ffine_out, np.real(zfine_out), np.imag(zfine_out)])
-    np.save(out_directory + f's21_gain_{file_suffix}.npy', 
-                [fgain_out, np.real(zgain_out), np.imag(zgain_out)]) 
+    np.save(out_directory + f's21_gain_{file_suffix}.npy',
+                [fgain_out, np.real(zgain_out), np.imag(zgain_out)])
 
     if take_rough_sweep:
-        np.save(out_directory + f's21_rough_{file_suffix}.npy', 
-                [frough_out, np.real(zrough_out), np.imag(zrough_out)]) 
+        np.save(out_directory + f's21_rough_{file_suffix}.npy',
+                [frough_out, np.real(zrough_out), np.imag(zrough_out)])
         np.save(out_directory + f'fres_initial_{file_suffix}.npy', fres_initial_out)
 
-    np.save(out_directory + f's21_fine_{file_suffix}.npy', 
+    np.save(out_directory + f's21_fine_{file_suffix}.npy',
                 [ffine_out, np.real(zfine_out), np.imag(zfine_out)])
-    np.save(out_directory + f's21_gain_{file_suffix}.npy', 
-                [fgain_out, np.real(zgain_out), np.imag(zgain_out)]) 
+    np.save(out_directory + f's21_gain_{file_suffix}.npy',
+                [fgain_out, np.real(zgain_out), np.imag(zgain_out)])
 
     np.save(out_directory + f'fres_{file_suffix}.npy', fres_out)
     np.save(out_directory + f'qres_{file_suffix}.npy', qres_out)
@@ -290,20 +290,16 @@ async def take_iq_noise_sequential(inst, module_index, ncos, fres, ares, qres, f
 
     for nco_index in range(len(ncos)):
         prefixes = ['fres', 'qres', 'ares', 'fres_all', 'qres_all', 'fcal_indices', 'res_indices',
-                    's21_fine', 's21_gain'] 
+                    's21_fine', 's21_gain']
         if take_rough_sweep:
             prefixes += ['s21_rough', 'fres_initial']
-        paths = [out_directory + prefix + f'_{file_suffix}_NCO{nco_index}.npy' for prefix in prefixes] 
+        paths = [out_directory + prefix + f'_{file_suffix}_NCO{nco_index}.npy' for prefix in prefixes]
         if take_noise:
             paths.append(out_directory + f'fres_noise_{file_suffix}_NCO{nco_index}.npy')
             paths.append(out_directory + f'noise_{file_suffix}_NCO{nco_index}_00.npy')
             paths.append(out_directory + f'noise_{file_suffix}_NCO{nco_index}_tsample_00.npy')
         for path in paths:
             os.remove(path)
-
-        
-
-
 
 async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,
                            file_suffix, npoints = 600, nsamps = 10, plot_directory = '',
@@ -374,9 +370,9 @@ async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, ou
                                  pbar_description = 'Rough sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
     fres = update_fres(f, z, fres, spans, fcal_indices,
-                        method = fres_update_method, plotq = plotq, res_indices = res_indices, 
+                        method = fres_update_method, plotq = plotq, res_indices = res_indices,
                         plot_directory = plot_directory, cable_delay = cable_delay)
-    np.save(out_directory + f'fres_interim{file_suffix}.npy', fres) 
+    np.save(out_directory + f'fres_interim{file_suffix}.npy', fres)
 
 
 # Haven't started adapting this one yet
@@ -404,9 +400,9 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
         update_ares_addonly. Iterations before these use update_ares_pscale
     fine_bw (float): fine sweep bandwidth in MHz. See take_iq_noise
     fres_update_method (str): method for updating frequencies. See update_fres
-    skip_first (bool): If True, skips taking data on the first iteration, and 
-        instead starts from fitting (assumes the data already exists) 
-    start_index (int): file index to start from. 
+    skip_first (bool): If True, skips taking data on the first iteration, and
+        instead starts from fitting (assumes the data already exists)
+    start_index (int): file index to start from.
     npoints_gain (int): number of points in the gain sweep
     npoints_fine (int): number of points in the fine sweep
     plot_directory (str or None): path to save histograms as the optimization is
@@ -450,7 +446,7 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
             save_fig(fig_hist, 'ares_hist', plot_directory)
             save_fig(fig_opt, 'ares_opt', plot_directory)
         # Update ares
-        fit_idx1 = [i for i in fit_idx if res[i] <= res_threshold and np.isfinite(a_nl[i])] # Don't update if bad fit 
+        fit_idx1 = [i for i in fit_idx if res[i] <= res_threshold and np.isfinite(a_nl[i])] # Don't update if bad fit
         if n_iterations - idx0 > n_addonly:
             ares[fit_idx1] = update_ares_pscale(fres[fit_idx1], ares[fit_idx1],
                                            a_nl[fit_idx1], a_target = a_target,
@@ -460,11 +456,11 @@ async def optimize_ares(inst, out_directory, fres, ares, qres, fcal_indices, res
             ares[fit_idx1] = update_ares_addonly(fres[fit_idx1], ares[fit_idx1],
                                                 a_nl[fit_idx1],
                                                 a_target = a_target,
-                                                dbm_max = dbm_max, 
+                                                dbm_max = dbm_max,
                                                 dbm_change_high = dbm_change_addonly,
                                                 dbm_change_low = dbm_change_addonly,
                                                 threshold = addonly_threshold)
-        
+
         # update fres
         f, i, q = np.load(out_directory + f's21_fine_{file_suffix}.npy')
         fres = update_fres(f, i + 1j * q, fres, qres,
@@ -480,32 +476,32 @@ async def optimize_ares_noise(inst, out_directory, fres, ares, qres, fcal_indice
                               npoints_gain = 50, npoints_fine = 400, plot_directory = None, bypass_indices = [],
                               verbose = False, nsamps = 10, dbm_change = 2, fres_all = None, qres_all = None):
     """
-    Optimize tone powers by iteratively taking noise data and comparing parallel to perpendicular noise 
+    Optimize tone powers by iteratively taking noise data and comparing parallel to perpendicular noise
 
     Parameters:
     inst (citkid.primecam.instrument.RFSOC): RFSOC instance
-    out_directory (str): directory to save data 
+    out_directory (str): directory to save data
     fres (array-like): array of center frequencies in Hz
     ares (array-like): array of amplitudes in RFSoC units
     qres (array-like): array of resonators Qs for cutting data. Resonances should
         span fres / qres
     fcal_indices (array-like): calibration tone indices
-    res_indices (array-like): resonator indices 
+    res_indices (array-like): resonator indices
     max_dbm (float): maximum power per tone in dBm
-    sfact_target (float): target value to exceed for Spar / Sper 
+    sfact_target (float): target value to exceed for Spar / Sper
     n_iterations (int): total number of iterations
-    sfact_freq (float): frequency at which Spar and Sper are averaged (in a 10% bin) to 
-        determine sfactor = Spar / Sper 
-    skip_first (bool): If True, skips taking data on the first iteration, and 
-        instead starts from fitting (assumes the data already exists) 
-    start_index (int): file index to start from. 
+    sfact_freq (float): frequency at which Spar and Sper are averaged (in a 10% bin) to
+        determine sfactor = Spar / Sper
+    skip_first (bool): If True, skips taking data on the first iteration, and
+        instead starts from fitting (assumes the data already exists)
+    start_index (int): file index to start from.
     npoints_gain (int): number of points in the gain sweep
     npoints_fine (int): number of points in the fine sweep
-    plot_directory (str or None): plots are not implemented yet 
+    plot_directory (str or None): plots are not implemented yet
     bypass_indices (array-like): resonator indices to bypass optimization
     verbose (bool): if True, displays a progress bar of the iteration number
     nsamps (int): number of samples per frequency in the sweeps for averaging
-    dbm_change (float): amount added to each power that is under sfact_target 
+    dbm_change (float): amount added to each power that is under sfact_target
     fres_all (array-like): full list of resonance frequencies for gain sweep fitting
     qres_all (array-like): full list of resonance q-factors for gain sweep fitting
     """
@@ -524,11 +520,11 @@ async def optimize_ares_noise(inst, out_directory, fres, ares, qres, fcal_indice
         file_suffix = f'{idx0:02d}'
         if not skip_first or idx0 != start_index:
             await take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
-                                take_noise = True, noise_time = int(sfact_freq / 5), take_rough_sweep = False, 
+                                take_noise = True, noise_time = int(sfact_freq / 5), take_rough_sweep = False,
                                 npoints_gain = npoints_gain, fres_all = fres_all, qres_all = qres_all,
                                 npoints_fine = npoints_fine, nsamps = nsamps)
 
-        # Calibrate noise 
+        # Calibrate noise
         fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
            fgains, zgains, ffines, zfines, znoises, noise_dt, res_indices =\
             import_iq_noise(out_directory, file_suffix, import_noiseq = True)
@@ -542,12 +538,12 @@ async def optimize_ares_noise(inst, out_directory, fres, ares, qres, fcal_indice
                 p_amp, p_phase, zf_rmv, _ =\
                 fit_and_remove_gain_phase(fg, zg, ff, zf, frs = fres_all, Qrs = qres_all, plotq=False)
                 zn_rmv = remove_gain(fn, zn, p_amp, p_phase)
-                f_psd, spar, sper = compute_psd_simple(ff, zf_rmv, fn, zn_rmv, noise_dt, deglitch_nstd = 5) 
+                f_psd, spar, sper = compute_psd_simple(ff, zf_rmv, fn, zn_rmv, noise_dt, deglitch_nstd = 5)
                 ix = np.abs(f_psd - sfact_freq) < (sfact_freq / 10)
                 sfactors[di] = np.mean(spar[ix]) / np.mean(sper[ix])
         np.save(out_directory + f'sfact_{idx0:02d}.npy', sfactors)
-        a_increase_idx = [di for di in fit_idx if sfactors[di] < sfact_target] 
-        ares[a_increase_idx] += dbm_change 
+        a_increase_idx = [di for di in fit_idx if sfactors[di] < sfact_target]
+        ares[a_increase_idx] += dbm_change
         ares[ares > dbm_max] = dbm_max
         # update fres
         f, i, q = np.load(out_directory + f's21_fine_{file_suffix}.npy')
