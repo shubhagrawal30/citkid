@@ -6,19 +6,19 @@ import numpy as np
 from time import sleep
 from tqdm.auto import tqdm
 import rfmux
-from .util import find_key_and_index, convert_parser_to_z, get_Modules
+from .util import find_key_and_index, convert_parser_to_z, get_modules
 
 class CRS:
-    def __init__(self, crs_sn = 27):
+    def __init__(self, serial_number = 27):
         """
         Initializes the crs object d. Not that the system must be
         configured using CRS.configure_system before measurements
 
         Parameters:
-        crs_sn (int): CRS serial number
+        serial_number (int): CRS serial number
         """
-        self.crs_sn = crs_sn
-        session_str = '!HardwareMap [ !CRS { ' + f'serial: "{crs_sn:04d}"'
+        self.serial_number = serial_number
+        session_str = '!HardwareMap [ !CRS { ' + f'serial: "{serial_number:04d}"'
         session_str += ' } ]'
         s = rfmux.load_session(session_str)
         self.d = s.query(rfmux.CRS).one()
@@ -34,7 +34,7 @@ class CRS:
         clock_source (str): clock source specification. 'VCXO' for the internal
             voltage controlled crystal oscillator or 'SMA' for the external 10
             MHz reference (reference should be 5 Vpp)
-        full_scale_dbm (int): full scale power in dBm. Range is [0, 7]???
+        full_scale_dbm (int): full scale power in dBm. Range is [-18, 7]
         analog_bank_high (bool): if True, uses modules 1-4 (DAC/ADC 5-8). Else
             uses modules 1-4 (DAC/ADC 1-4)
         verbose (bool): If True, gets and prints the clocking source
@@ -111,7 +111,7 @@ class CRS:
                 nco_str = f'{round(nco_meas * 1e-6, 6)}'
                 print(f'Module {module_index} NCO is {nco_str} MHz')
 
-    async def write_tones(self, fres, ares):
+    async def write_tones(self, fres, ares, return_max_ntones = False):
         """
         Writes an array of tones given frequencies and amplitudes. Splits the
         tones into the appropriate modules using the NCO frequencies.
@@ -123,6 +123,8 @@ class CRS:
         Parameters:
         fres (array-like): tone frequencies in Hz
         ares (array-like): tone powers in dBm
+        return_max_ntones (bool): If True, returns 
+            max_ntones (int): maximum number of tones on any given module
         """
         # Split fres and ares into dictionaries
         if not len(self.nco_freq_dict):
@@ -144,7 +146,7 @@ class CRS:
         for module_index in self.nco_freq_dict.keys():
             bw_half = 312.5e6 if self.extended_bw else 250e6
             diffs = self.fres_dict[module_index] - self.nco_freq_dict[module_index]
-            if any(np.abs(diffs)) > bw_half):
+            if any(np.abs(diffs) > bw_half):
                 err = f'All of fres must be within {round(bw_half / 1e6, 1)} '
                 err += 'MHz of an NCO frequency'
                 raise ValueError(err)
@@ -152,6 +154,9 @@ class CRS:
         modules = get_modules(self.d, list(self.fres_dict.keys()))
         await modules.write_tones(self.nco_freq_dict, self.fres_dict,
                                   self.ares_dict)
+        if return_max_ntones:
+            max_ntones = max([len(f) for f in self.fres_dict.values()])
+            return max_ntones 
 
     async def sweep(self, frequencies, ares, nsamps = 10, verbose = True,
                     pbar_description = 'Sweeping'):
@@ -290,9 +295,9 @@ class CRS:
         bw_total = 625e6 if self.extended_bw else 500e6
         bw = bw_total / 1024 + 200
         spacing = bw / npoints
-        first = nco - bw_total / 2 + 10 + bw
-        last  = nco + bw_total / 2 - 10 - bw
-        fres = np.concatenate([np.linspace(first, last, 1024) for nco in ncos])
+        fres = np.concatenate([np.linspace(nco - bw_total / 2 + 10 + bw, 
+                                           nco + bw_total / 2 - 10 - bw, 
+                                           1024) for nco in ncos])
         ares = amplitude * np.ones(len(fres))
         # Left off here
         f, z = await self.sweep_linear(fres, ares, bw = bw - spacing,
@@ -304,55 +309,9 @@ class CRS:
         f, z = f[ix], z[ix]
         return f, z
 
-    async def capture_fast_noise(self, frequency, amplitude, time = 1,
-                                 nsegments = 10, verbose = False):
-        """
-        Captures noise with a 2.44 MHz sample rate on a single channel. Turns on
-        only a single channel to avoid noise spikes from neighboring channels.
-        Note that the output will have to be corrected for the nonlinear PFB bin
-        after taking a PSD. Temporarily changes the NCO frequency to center the
-        tone on a PFB bin
-
-        Parameters:
-        frequency (float): tone frequency in Hz
-        amplitude (float): tone amplitude in dBm
-        time (float): timestream length in s. Max is 4 s
-        nsegments (int): number of sequential timestreams to capture and average
-            linearly over
-        verbose (bool): if True, prints NCO frequency settings
-        """
-        # Set up parameters for noise capture
-        select_nco = key = lambda k: np.abs(self.nco_freq_dict[k] - frequency)
-        module_index = min(self.nco_freq_dict, select_nco)
-        bw_half = 312.5e6 if self.extended_bw else 250e6
-        if np.abs(frequency - self.nco_freq_dict[module_index] > bw_half):
-            err = f'Frequency must be within {round(bw_half / 1e6, 1)} MHz of '
-            err += 'an NCO frequency'
-            raise ValueError(err)
-        fsample = 625e6 / 256
-        nsamps = int(time * fsample)
-        if nsamps > 1e7:
-            raise ValueError('Time must be less than 4 s')
-        # Capture samples
-        samples = await self.d.get_pfb_samples(int(nsamps), channel = 1,
-                                                   module = module_index,
-                                                   binlim = 1e6, trim = True,
-                                                   nsegments = nsegments,
-                                                   reference = 'relative', # dBc / Hz
-                                                   reset_NCO = True, # shifts NCO to bin center
-                                                   )
-        f = np.asarray(samples.spectrum.freq_iq)
-        z = np.asarray(samples.spectrum.psd_i + 1j * samples.spectrum.psd_q)
-        z = np.array(samples.i + 1j * samples.q)
-        
-        # This might be already applied with reference = True
-        # z *= rfmux.core.utils.transferfunctions.VOLTS_PER_ROC / np.sqrt(2)
-        # z /= 10 ** (ares[:, np.newaxis] / 20)
-        return f, z
-
     async def capture_noise(self, fres, ares, noise_time, fir_stage = 6,
                             parser_loc='/home/daq1/github/rfmux/firmware/r1.5.5/parser',
-                            interface='enp2s0', delete_parser_data = False,
+                            interface='enp2s0', delete_parser_data = True,
                             verbose = True):
         """
         Captures a noise timestream using the parser.
@@ -390,13 +349,13 @@ class CRS:
             print(f'fir stage is {await self.d.get_fir_stage()}')
 
         # set the tones
-        await self.write_tones(fres, ares)
+        max_ntones = await self.write_tones(fres, ares, return_max_ntones = True)
         sleep(1)
         # Collect the data
         num_samps = int(self.sample_frequency*(noise_time + 10))
-        channels = '1-' + f'{len(fres)}'
+        channels = '1-' + f'{max_ntones}'
         parser = subprocess.Popen([parser_loc, '-c', channels, '-d', data_path,
-                                   '-i', interface, '-s', f'{self.crs_sn:04d}',
+                                   '-i', interface, '-s', f'{self.serial_number:04d}',
                                    '-n', str(num_samps)], shell=False)
         pbar = list(range(int(noise_time) + 20))
         if verbose:
@@ -408,7 +367,7 @@ class CRS:
         # read the data and convert to z
         z = [[]] * len(fres)
         for module_index in module_indices:
-            zi = convert_parser_to_z(data_path, self.crs_sn, module_index,
+            zi = convert_parser_to_z(data_path, self.serial_number, module_index,
                                      ntones = len(self.ch_ix_dict[module_index]))
             fres0 = self.fres_dict[module_index].copy()
             for index, ch_index in enumerate(self.ch_ix_dict[module_index]):
@@ -421,6 +380,53 @@ class CRS:
         z /= 10 ** (ares[:, np.newaxis] / 20)
         return z
 
+    async def capture_fast_noise(self, frequency, amplitude, time = 1,
+                                 nsegments = 10, verbose = False):
+        """
+        Captures noise with a 2.44 MHz sample rate on a single channel. Turns on
+        only a single channel to avoid noise spikes from neighboring channels.
+        Note that the output will have to be corrected for the nonlinear PFB bin
+        after taking a PSD. Temporarily changes the NCO frequency to center the
+        tone on a PFB bin
+
+        Parameters:
+        frequency (float): tone frequency in Hz
+        amplitude (float): tone amplitude in dBm
+        time (float): timestream length in s. Max is 4 s
+        nsegments (int): number of sequential timestreams to capture and average
+            linearly over
+        verbose (bool): if True, prints NCO frequency settings
+        """
+        warnings.warn('This function is a work in progress, and likely will not output what you expect', UserWarning)
+        # Set up parameters for noise capture
+        select_nco = key = lambda k: np.abs(self.nco_freq_dict[k] - frequency)
+        module_index = min(self.nco_freq_dict, select_nco)
+        bw_half = 312.5e6 if self.extended_bw else 250e6
+        if np.abs(frequency - self.nco_freq_dict[module_index] > bw_half):
+            err = f'Frequency must be within {round(bw_half / 1e6, 1)} MHz of '
+            err += 'an NCO frequency'
+            raise ValueError(err)
+        fsample = 625e6 / 256
+        nsamps = int(time * fsample)
+        if nsamps > 1e7:
+            raise ValueError('Time must be less than 4 s')
+        # Capture samples
+        samples = await self.d.get_pfb_samples(int(nsamps), channel = 1,
+                                                   module = module_index,
+                                                   binlim = 1e6, trim = True,
+                                                   nsegments = nsegments,
+                                                   reference = 'relative', # dBc / Hz
+                                                   reset_NCO = True, # shifts NCO to bin center
+                                                   )
+        f = np.asarray(samples.spectrum.freq_iq)
+        z = np.asarray(samples.spectrum.psd_i + 1j * samples.spectrum.psd_q)
+        z = np.array(samples.i + 1j * samples.q)
+        
+        # This might be already applied with reference = True
+        # z *= rfmux.core.utils.transferfunctions.VOLTS_PER_ROC / np.sqrt(2)
+        # z /= 10 ** (ares[:, np.newaxis] / 20)
+        return None, None
+        return f, z
 ################################################################################
 ################## Methods registered to rfmux.ReadoutModule ###################
 ################################################################################
