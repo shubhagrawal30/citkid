@@ -13,15 +13,14 @@ from ..noise.analysis import compute_psd
 from ..noise.data_io import save_psd
 from .data_io import import_iq_noise
 from .fres import cut_fine_scan
-# from hidfmux.core.utils.transferfunctions import apply_cic2_comp_psd
 import matplotlib
 matplotlib.use('Agg')
 
-# Need to update docstrings, imports
 def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
            constant_atten, temperature_index, temperature, rejected_points = [],
-           extra_fitdata_values = {}, plotq = False, plot_factor = 1, cut_to_qres = False,
-           overwrite = False, verbose = True, catch_exceptions = False):
+           extra_fitdata_values = {}, plotq = False, plot_factor = 1,
+           cut_to_qres = False, overwrite = False, verbose = True,
+           catch_exceptions = False):
     """
     Fits all IQ loops in a target scan
 
@@ -40,9 +39,6 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     temperature (float): temperature in K for logging
     rejected_points (array-like): indices to discard from fine scan data before
         fitting
-    res_indices (np.array or None): If np.array, list of resonator
-        indices corresponding to each resonator in the target sweep. If
-        None, resonator indices are assigned by their index into fres
     extra_fitdata_values (dict): keys (str) are data column names and values
         (single value or np.array with same length as number of targets) are set
         to that data column
@@ -99,8 +95,8 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
         if pbar_index not in fcal_indices:
             ffine, zfine = cut_fine_scan(ffine, zfine, fres, fres / qres)
         if cut_to_qres:
-            ix = np.abs(ffine - fr) < fr / Qr  
-            ffine, zfine = ffine[ix], zfine[ix] 
+            ix = np.abs(ffine - fr) < fr / Qr
+            ffine, zfine = ffine[ix], zfine[ix]
 
         file_prefix = f'Tn{temperature_index}Fn{resonator_index}'
         file_prefix += f'Pn{power_number}{file_suffix}'
@@ -162,13 +158,15 @@ def fit_iq(directory, out_directory, file_suffix, power_number, in_atten,
     return data
 
 def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
-                  plot_calq = False, plot_psdq = False, correct_cic2 = False,
+                  plot_calq = False, plot_psdq = False,
                   plot_timestreamq = False, plot_factor = 1, min_cal_points = 5,
                   deglitch_nstd = 10, cr_nstd = 5, cr_width = 100e-6,
-                  cr_peak_spacing = 100e-6, cr_removal_time = 1e-3, circfit_npoints = None,
-                  overwrite = False, verbose = False, catch_exceptions = False,
-                  res_whitelist = None, xcal_weight_sigma = None, xcal_weight_theta0 = 0.0,
-                  circfit_mode = 'sequential'):
+                  cr_peak_spacing = 100e-6, cr_removal_time = 1e-3,
+                  circfit_npoints = None, correct_cic2 = False,
+                  overwrite = False, catch_exceptions = False,
+                  res_whitelist = None, xcal_weight_sigma = None,
+                  xcal_weight_theta0 = 0.0, circfit_mode = 'sequential',
+                  verbose = False):
     """
     Analyze noise data to produce timestreams and PSDs
 
@@ -184,6 +182,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     plot_timestreamq (bool): If True, plots the timestreams
     plot_factor (int): for plotting a subset of data. Plots every plot_factor
         datasets
+    min_cal_points (int): minimum number of points for the x calibration fit
     deglitch_nstd (float or None): threshold for removing glitched data points
         from the timestream, or None to bypass deglitching. Points more than
         deglitch_nstd times the standard deviations of the theta timestream are
@@ -192,22 +191,24 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     cr_width (int): width of cosmic rays in seconds
     cr_peak_spacing (float): number of seconds spacing between cosmic rays
     cr_removal_time (float): number of seconds to remove around each peak
-    circfit_npoints (int): if not None, limits the number of points in the circle 
-        fit to circfit_npoints around the noise ball
+    circfit_npoints (int): if not None, limits the number of points in the
+        circle fit to circfit_npoints around the noise ball
+    correct_cic2 (bool): If True, corrects the PSDs for the CIC rolloff
+        NOT IMPLEMENTED YET: WAITING FOR RFMUX UPDATE
     overwrite (bool): if False, raises an error instead of overwriting files
-    verbose (bool): if True, displays a progress bar while analyzing noise
     catch_exceptions (bool): If True, catches any exceptions that occur while
         analyzing noise data and proceeds
     res_whitelist (list or None): if not None, only process the resonator
 		indices listed; otherwise process all
-    xcal_weight_sigma (float): stdev of gaussian weight function for 
+    xcal_weight_sigma (float): stdev of gaussian weight function for
         fitter in radians. Defaults to None for no weighting.
-    xcal_weight_theta0 (float): center point in radians for gaussian 
+    xcal_weight_theta0 (float): center point in radians for gaussian
         weight function
     circfit_mode (str): method used to select the points used in fitting
 		the IQ circle ('sequential' uses adjacent indices, 'nearest_z'
 		uses distance in the z plane)
-    
+    verbose (bool): if True, displays a progress bar while analyzing noise
+
     Returns:
     data_new (pd.DataFrame): output data with the noise analysis parameters
         inserted. This DataFrame is also saved as a csv file in
@@ -241,7 +242,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
     data_new = pd.DataFrame([])
     for data_index, res_index in enumerate(pbar):
         if (res_whitelist is not None) and (res_index not in res_whitelist):
-            continue		
+            continue
         plot_calq_single = ((data_index % plot_factor) == 0) and plot_calq
         plot_psdq_single = ((data_index % plot_factor) == 0) and plot_psdq
         plot_timestreamq_single = ((data_index % plot_factor) == 0) and plot_timestreamq
@@ -258,13 +259,13 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
             separate_fit_row(iq_fit_row)
 
         zfine = remove_gain(ffine, zfine, p_amp, p_phase)
-        znoise = remove_gain(fnoise, znoise, p_amp, p_phase) 
+        znoise = remove_gain(fnoise, znoise, p_amp, p_phase)
 
         if circfit_mode == 'sequential':
             # Sequential steps near noise mean (previous default behavior)
             if circfit_npoints is not None:
-                ix_mid = np.argmin(np.abs(np.mean(znoise) - zfine)) 
-                ix0, ix1 = ix_mid - circfit_npoints // 2, ix_mid + (circfit_npoints - circfit_npoints // 2) 
+                ix_mid = np.argmin(np.abs(np.mean(znoise) - zfine))
+                ix0, ix1 = ix_mid - circfit_npoints // 2, ix_mid + (circfit_npoints - circfit_npoints // 2)
                 ffine, zfine = ffine[ix0:ix1], zfine[ix0:ix1]
         elif circfit_mode == 'nearest_z':
             # Take the n points closest to the median of the noise by
@@ -275,7 +276,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
             ffine, zfine = ffine[i_nearest], zfine[i_nearest]
         else:
             raise ValueError("Invalid value for circfit_mode: " + str(circfit_mode))
-            
+
         try:
             if data_index in fcal_indices:
                 psd_onres, psd_offres, timestream_onres, timestream_offres,\
@@ -284,7 +285,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             fnoise_offres = fnoise, znoise_offres = znoise,
                             dt_offres = dt, flag_crs = False,
                             deglitch_nstd = deglitch_nstd,
-                            plot_calq = plot_calq_single, 
+                            plot_calq = plot_calq_single,
                             plot_psdq = plot_psdq_single, min_cal_points = min_cal_points,
                             plot_timestreamq = plot_timestreamq_single,
                             xcal_weight_theta0 = xcal_weight_theta0,
@@ -305,7 +306,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             fnoise_offres = None, znoise_offres = None,
                             dt_offres = None, flag_crs = True,
                             deglitch_nstd = deglitch_nstd,
-                            plot_calq = plot_calq_single, 
+                            plot_calq = plot_calq_single,
                             plot_psdq = plot_psdq_single, min_cal_points = min_cal_points,
                             plot_timestreamq = plot_timestreamq_single,
                             cr_nstd = cr_nstd, cr_width = cr_width,
@@ -315,6 +316,7 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
                             xcal_weight_sigma = xcal_weight_sigma)
 
                 if correct_cic2:
+                    raise Exception('CIC correction is not implemented yet. Waiting for an rfmux update.')
                     for i in range(1, 3):
                         ftrim_on, s = apply_cic2_comp_psd(psd_onres[0], 10 ** (psd_onres[i] / 10), 1 / dt, trim=0.15)
                         psd_onres[i] = 10 * np.log10(s)
@@ -340,12 +342,12 @@ def analyze_noise(main_out_directory, file_suffix, noise_index, tstart = 0,
 def plot_fits_batch(directory, file_suffix, plot_directory):
     """
 
-
     Parameters:
     directory (str): directory containing the data to fit
     file_suffix (str): file suffix of the data
     plot_directory (str): directory to save plots
     """
+    warnings.warn('Someone needs to document this', UserWarning)
     data = fit_iq(directory, None, file_suffix, 0, 0, 0, 0, 0, rejected_points = [],
                       plotq = False, verbose = True, catch_exceptions = True)
 
@@ -413,7 +415,7 @@ def plot_fits_batch(directory, file_suffix, plot_directory):
 
         save_fig(fig, f'fres_update_{fig_index}', plot_directory, ftype = 'png',
                             tight_layout = False, close_fig = True)
-        
+
 ################################################################################
 ######################### Utility functions ####################################
 ################################################################################

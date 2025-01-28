@@ -6,17 +6,19 @@ from ..multitone.fres import update_fres
 from ..multitone.analysis import fit_iq
 from ..multitone.plot import plot_ares_opt
 from ..util import save_fig
-import matplotlib.pyplot as plt
-from time import sleep
 from ..res.gain import fit_and_remove_gain_phase, remove_gain
 from ..multitone.data_io import import_iq_noise
 from ..noise.analysis import compute_psd_simple
 
-async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_directory, file_suffix,
-                  noise_time = 200, take_noise = False, gain_span_factor = 10, npoints_noisefreq_update = None,
-                  npoints_fine = 600, npoints_gain = 100, npoints_rough = 300, nsamps = 10,
-                  take_rough_sweep = False, fres_update_method = 'distance', fir_stage = 6,
-                  fres_all = None, qres_all = None, cable_delay = 0, verbose = True):
+async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices,
+                        out_directory, file_suffix, noise_time = 200,
+                        take_noise = False, gain_span_factor = 10,
+                        npoints_noisefreq_update = None, npoints_fine = 600,
+                        npoints_gain = 100, npoints_rough = 300, nsamps = 10,
+                        take_rough_sweep = False,
+                        fres_update_method = 'distance', fir_stage = 6,
+                        fres_all = None, qres_all = None, cable_delay = 0,
+                        verbose = True):
     """
     Takes multitone IQ sweeps and noise.
 
@@ -25,28 +27,29 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
         'sweep', 'write_tones', and 'capture_noise' methods
     fres (np.array): array of resonance frequencies in Hz
     ares (np.array): array of amplitudes in RFSoC units
-    qres (np.array): array of span factors for cutting out of adjacent datasets.
+    qres (np.array): array of span factors for cutting out of adjacent datasets
         Resonances should span fres / qres
-    fcal_indices (np.array): indices (into fres, ares, qres) of calibration tones
+    fcal_indices (np.array): indices (into fres, ares, qres) of calibration
+        tones
+    res_indices (np.array): Array of resonators indices (int)
     out_directory (str): directory to save the data
     file_suffix (str): suffix for file names
     noise_time (float or None): noise timestream length in seconds
-    if_bw (float): IF bandwidth. 1 / if_bw is the averaging time per data point
-        in the IQ loops
-    fine_bw (float): fine sweep bandwidth in Hz. Gain bandwidth is 10 X fine
-        bandwidth
-    npoints_noisefreq_update (int): Number of points around the center of the fine sweep that
-        are used to update frequencies before taking noise, or None to bypass updating
-    rough_bw (float): rough sweep bandwidth in Hz
+    take_noise (bool): If True, takes noise data
+    gain_span_factor (float): gain span is (gain_span_factor * fine_span)
+    npoints_noisefreq_update (int): Number of points around the center of the
+        fine sweep that are used to update frequencies before taking noise, or
+        None to bypass updating
     npoints_fine (int): number of points per resonator in the fine sweep
     npoints_gain (int): number of points per resonator in the gain sweep
     npoints_rough (int): number of points per resonator in the rough sweep
     take_rough_sweep (bool): if True, first takes a rough sweep and optimizes
         the tone frequencies
+    nsamps (int): number of samples to average over per point in the sweeps
+    take_rough_sweep (bool): If True, takes a rough sweep and updates
+        frequencies before taking noise
     fres_update_method (str): method for updating the tone frequencies, if
         take_rough_sweep is True. See .fres.update_fres for methods
-    nnoise_timestreams (int): number of noise timestreams to take sequentially.
-        Set to 0 to bypass noise acquisition
     fir_stage (int): fir_stage frequency downsampling factor.
             6 ->   596.05 Hz
             5 -> 1,192.09 Hz
@@ -55,7 +58,8 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
     fres_all (array-like): list of all frequencies for analysis, if fres is
         incomplete
     qres_all (array-like): array of span factors corresponding to fres_all
-    verbose (bool): If True, displays progress bars while taking data 
+    cable_delay (float): Cable delay estimate to improve frequency update
+    verbose (bool): If True, displays progress bars while taking data
     """
     data_path = 'tmp/parser_data_00/'
     if os.path.exists(data_path) and take_noise:
@@ -85,7 +89,8 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
     if take_rough_sweep:
         filename = f's21_rough{file_suffix}.npy'
         f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_rough,
-                                     nsamps = nsamps, verbose = verbose, pbar_description = 'Rough sweep')
+                                     nsamps = nsamps, verbose = verbose,
+                                     pbar_description = 'Rough sweep')
         np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
         fres = update_fres(f, z, fres, spans, fcal_indices,
                             method = fres_update_method, cable_delay = cable_delay)
@@ -94,43 +99,39 @@ async def take_iq_noise(inst, fres, ares, qres, fcal_indices, res_indices, out_d
 
     # Gain Sweep
     filename = f's21_gain{file_suffix}.npy'
-    f, z = await inst.sweep_qres(fres, ares, qres0 / gain_span_factor, npoints = npoints_gain, nsamps = nsamps,
-                                   verbose = verbose, pbar_description = 'Gain sweep')
+    f, z = await inst.sweep_qres(fres, ares, qres0 / gain_span_factor,
+                                 npoints = npoints_gain, nsamps = nsamps,
+                                 verbose = verbose,
+                                 pbar_description = 'Gain sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
 
     # Fine Sweep
     filename = f's21_fine{file_suffix}.npy'
-    f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_fine, nsamps = nsamps,
-                                   verbose = verbose, pbar_description = 'Fine sweep')
+    f, z = await inst.sweep_qres(fres, ares, qres0, npoints = npoints_fine,
+                                 nsamps = nsamps, verbose = verbose,
+                                 pbar_description = 'Fine sweep')
     np.save(out_directory + filename, [f, np.real(z), np.imag(z)])
     if npoints_noisefreq_update is not None:
-        ix0, ix1 = npoints_fine // 2 - npoints_noisefreq_update // 2, npoints_fine // 2 + npoints_noisefreq_update // 2 + npoints_noisefreq_update % 2
+        ix0 = npoints_fine // 2 - npoints_noisefreq_update // 2,
+        ix1 = npoints_fine // 2 + npoints_noisefreq_update // 2
+        ix1 += npoints_noisefreq_update % 2
         f0 = [fi[ix0: ix1] for fi in f]
         z0 = [zi[ix0: ix1] for zi in z]
-        fres = update_fres(f0, z0, fres, spans, fcal_indices, method = 'spacing', cable_delay = cable_delay)
+        fres = update_fres(f0, z0, fres, spans, fcal_indices,
+                           method = 'spacing', cable_delay = cable_delay)
     np.save(out_directory + f'fres_noise{file_suffix}.npy', fres)
 
     # Noise
     if take_noise:
         filename = f'noise{file_suffix}_00.npy'
-        z = await inst.capture_noise(fres, ares, noise_time, fir_stage = fir_stage,
-                                     delete_parser_data = True, verbose = verbose)
+        z = await inst.capture_noise(fres, ares, noise_time,
+                                     fir_stage = fir_stage,
+                                     delete_parser_data = True,
+                                    verbose = verbose)
         np.save(out_directory + filename, [np.real(z), np.imag(z)])
         fsample_noise = inst.sample_frequency
         filename = f'noise{file_suffix}_tsample_00.npy'
         np.save(out_directory + filename, 1 / fsample_noise)
-    # Should implement fast_noise eventually
-    # if take_fast_noise:
-    #     pbar = range(len(fres))
-    #     if verbose:
-    #         pbar = tqdm(pbar, total = len(fres), leave = False)
-    #         pbar.set_description('Fast noise index')
-    #     for data_index in pbar:
-    #         frequency, amplitude = fres[data_index], ares[data_index]
-    #         for noise_index in range(n_fast_noise):
-    #             filename = f'noise_fast{file_suffix}_DI{data_index:04d}NI{noise_index:02d}.npy'
-    #             fraw, z = await inst.capture_fast_noise(frequency, amplitude, fast_noise_time, nsegments = nsegments_fastnoise, verbose = False)
-    #             np.save(out_directory + filename, [fraw, np.real(z), np.imag(z)])
 
 
 async def take_rough_sweep(inst, fres, ares, qres, fcal_indices, res_indices, out_directory,
