@@ -24,7 +24,7 @@ class CRS:
         self.d = s.query(rfmux.CRS).one()
         self.nco_freq_dict = {}
 
-    async def configure_system(self, clock_source="SMA", full_scale_dbm = 1,
+    async def configure_system(self, clock_source="SMA", full_scale_dbm = 7,
                                analog_bank_high = False, verbose = True):
         """
         Resolves the system, sets the timestamp port, sets the clock source, and
@@ -427,6 +427,7 @@ class CRS:
         # z /= 10 ** (ares[:, np.newaxis] / 20)
         return None, None
         return f, z
+    
 ################################################################################
 ################## Methods registered to rfmux.ReadoutModule ###################
 ################################################################################
