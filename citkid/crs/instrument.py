@@ -1,12 +1,11 @@
 import os
 import shutil
 import warnings
-import subprocess
 import numpy as np
 from time import sleep
 from tqdm.auto import tqdm
 import rfmux
-from .util import find_key_and_index, convert_parser_to_z, get_modules
+from .util import find_key_and_index, convert_parser_to_z, get_modules, run_for_duration
 
 class CRS:
     def __init__(self, serial_number = 27):
@@ -352,23 +351,18 @@ class CRS:
         max_ntones = await self.write_tones(fres, ares, return_max_ntones = True)
         sleep(1)
         # Collect the data
-        num_samps = int(self.sample_frequency*(noise_time + 10))
-        channels = '1-' + f'{max_ntones}'
-        parser = subprocess.Popen([parser_loc, '-c', channels, '-d', data_path,
-                                   '-i', interface, '-s', f'{self.serial_number:04d}',
-                                   '-n', str(num_samps)], shell=False)
-        pbar = list(range(int(noise_time) + 20))
-        if verbose:
-            pbar = tqdm(pbar, leave = False)
-        for i in pbar:
-            sleep(1)
+        channels = '1-' + f'{max_ntones}' 
+        cmd = [parser_loc, '-c', channels, '-d', data_path,
+                           '-i', interface, '-s', f'{46:04d}']
+        run_for_duration(cmd, noise_time, verbose)
         # Set fir stage back
         await self.d.set_fir_stage(6)
         # read the data and convert to z
         z = [[]] * len(fres)
         for module_index in module_indices:
             zi = convert_parser_to_z(data_path, self.serial_number, module_index,
-                                     ntones = len(self.ch_ix_dict[module_index]))
+                                     ntones = len(self.ch_ix_dict[module_index]),
+                                     max_ntones = max_ntones)
             fres0 = self.fres_dict[module_index].copy()
             for index, ch_index in enumerate(self.ch_ix_dict[module_index]):
                 z[ch_index] = zi[index]
@@ -469,7 +463,8 @@ async def write_tones(module, nco_freq_dict, fres_dict, ares_dict):
         # Randomize frequencies a little. This might be unneccesary but I kept it in to be safe
         ix = [i for i in range(len(fres)) if i not in [np.argmin(fres), np.argmax(fres)]]
         # don't randomize lowest and highest frequency to avoid exceeding bandwidth
-        fres[ix] += np.random.uniform(-50, 50, len(fres) - 2)
+        if len(fres) > 2:
+            fres[ix] += np.random.uniform(-50, 50, len(fres) - 2)
         comb_sampling_freq =rfmux.core.utils.transferfunctions.COMB_SAMPLING_FREQ
         threshold = 101.
         fres[fres%(comb_sampling_freq/512) < threshold] += threshold

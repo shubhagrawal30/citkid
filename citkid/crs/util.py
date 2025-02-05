@@ -1,8 +1,13 @@
 import numpy as np
 import os
 import rfmux
+import subprocess 
+import signal 
+import sys 
+from time import sleep 
+from tqdm.auto import tqdm 
 
-def convert_parser_to_z(path, crs_sn, module, ntones):
+def convert_parser_to_z(path, crs_sn, module, ntones, max_ntones):
     """
     Import a parser file and convert the data to complex S21 in V
 
@@ -21,7 +26,7 @@ def convert_parser_to_z(path, crs_sn, module, ntones):
                                           np.dtype([('i', np.int32),
                                                     ('q', np.int32)]))
     z = np.array([complex(*pi) for pi in parser_dat])
-    z = np.array([z[i::1024] for i in range(ntones)])
+    z = np.array([z[i::max_ntones] for i in range(ntones)])
     z = z * rfmux.core.utils.transferfunctions.VOLTS_PER_ROC / 256 / np.sqrt(2)
     return z
 
@@ -61,3 +66,32 @@ def get_modules(crs, module_indices):
     modules_generic = rfmux.ReadoutModule.module.in_(module_indices)
     modules = crs.modules.filter(modules_generic)
     return modules
+
+def run_for_duration(cmd, duration, verbose = True):
+    """
+    Run a command for a given duration, then shut it down safely, 
+    even if Python is closed.
+    
+    Parameters:
+    cmd (str): command to run 
+    duration (int): duration in seconds 
+    verbose (bool): If True, displays a progress bar while running 
+    """
+    if os.name == "nt":  # Windows
+        process = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:  # Linux/macOS
+        process = subprocess.Popen(cmd, preexec_fn=os.setsid)
+
+    try:
+        pbar = list(range(int(duration)))
+        if verbose:
+            pbar = tqdm(pbar, leave = False)
+        sleep(0.04)
+        for i in pbar:
+            sleep(1)
+    finally:
+        if os.name == "nt":
+            subprocess.call(["taskkill", "/F", "/T", "/PID", str(process.pid)])  # Windows force kill
+        else:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)  # Unix kill entire process group
+
