@@ -353,7 +353,7 @@ class CRS:
         # Collect the data
         channels = '1-' + f'{max_ntones}' 
         cmd = [parser_loc, '-c', channels, '-d', data_path,
-                           '-i', interface, '-s', f'{46:04d}']
+                           '-i', interface, '-s', f'{self.serial_number:04d}']
         run_for_duration(cmd, noise_time, verbose)
         # Set fir stage back
         await self.d.set_fir_stage(6)
