@@ -4,8 +4,7 @@ import pyfftw
 
 def get_psd(x, dt, get_frequencies = False):
     """
-    Given a timeseries with a constant sample rate, calculates the power
-    spectral density.
+    Calculates the unilateral power spectral density magnitude of a timestream
 
     Parameters:
     x (np.array): timeseries data
@@ -21,6 +20,26 @@ def get_psd(x, dt, get_frequencies = False):
         return psd
     f = np.fft.rfftfreq(len(x), d = dt)
     return f, psd
+
+def get_csd(x1, x2, dt):
+    """
+    Calculates the unilateral cross spectral density magnitude of two
+    timestreams
+
+    Parameters:
+    x1 (np.array): first timeseries data
+    x2 (np.array): second timeseries data
+    dt (float): sample rate of timeseries
+
+    Returns:
+    cpsd (np.array): cross spectral density
+    """
+    a1 = pyfftw.interfaces.numpy_fft.rfft(x1)
+    a2 = pyfftw.interfaces.numpy_fft.rfft(x2)
+    cpsd = 2 * np.conj(a1) * a2 * dt / len(x1)
+    cpsd = np.abs(cpsd)
+    f = np.fft.rfftfreq(len(x1), d = dt)
+    return f, cpsd
 
 ################################################################################
 ############################ Binning and filtering #############################
