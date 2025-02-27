@@ -50,6 +50,7 @@ def apply_cic2_comp_psd(f, psd, fsample, trim = 0.25):
     f_trim (np.array): trimmed frequencies
     psd_trim (np.array): trimmed and CIC2 filter compensated PSD
     '''
+    warnings.warn(f"This function is an approximation. The exact version will be available in rfmux soon.", UserWarning)
     f, psd = np.asarray(f), np.asarray(psd)
     psd_comp = np.asarray(psd) / (cic2_response(np.asarray(f), fsample)) ** 2
     ix = int(np.ceil((1 - trim) * len(psd_comp)))
