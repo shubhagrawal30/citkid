@@ -6,7 +6,7 @@ from citkid.res.funcs import get_y
 
 @jit(nopython=True)
 def make_random_resonance_data(get_noise = False, nnoise_points = 1000,
-                               fine_span_factor = 'random'):
+                                npoints_fine = 500, npoints_gain = 50):
     """
     Makes a dataset of a random resonator and returns the data with the actual
     resonator parameters
@@ -15,8 +15,6 @@ def make_random_resonance_data(get_noise = False, nnoise_points = 1000,
         get_noise (bool): if True, also returns a noise timestream that is white
             in the frequency and dissipation directions
         nnoise_points (int): number of points in the noise timestream
-        fine_span_factor (float): span = fine_span_factor * fr / Qr, or set to
-            'random' to choose a random factor between 2 and 100
     Returns:
         ffine (np.array): fine sweep frequency data in Hz
         zfine (np.array): fine sweep complex S21 data
@@ -29,18 +27,15 @@ def make_random_resonance_data(get_noise = False, nnoise_points = 1000,
     p = get_random_resonance_parameters()
 
     fr, Qr = p[2], p[3]
-    if fine_span_factor == 'random':
-        span = np.random.uniform(2, 100) * fr / Qr
-    else:
-        span = fine_span_factor * fr / Qr
+    span = np.random.uniform(2, 100) * fr / Qr
     # Rough sweep
-    frough = np.linspace(fr - span / 2, fr + span / 2, 500)
+    frough = np.linspace(fr - span / 2, fr + span / 2, npoints_fine)
     zrough = get_resonance_s21(frough, *p)
     f0 = update_fr_distance(frough, zrough)
     # Fine sweep
-    ffine = np.linspace(f0 - span / 2, f0 + span / 2, 500)
+    ffine = np.linspace(f0 - span / 2, f0 + span / 2, npoints_fine)
     zfine = get_resonance_s21(ffine, *p)
-    fgain = np.linspace(f0 - 10 * span / 2, f0 + 10 * span / 2, 500)
+    fgain = np.linspace(f0 - 10 * span / 2, f0 + 10 * span / 2, npoints_gain)
     zgain = get_resonance_s21(fgain, *p)
     f0 = update_fr_distance(fgain, zgain)
     znoise = np.zeros(nnoise_points, dtype = np.complex64)
@@ -99,15 +94,16 @@ def get_random_resonance_parameters():
     random = lambda low, high: np.random.uniform(low, high)
     random_log = lambda low, high: np.exp(np.random.uniform(np.log(low),
                                                             np.log(high)))
+
     fr_noise_nstd  = random(-10, -7.3979400086720375)
     fr_noise_nstd  = 10 ** fr_noise_nstd
     amp_noise_nstd = random(-4.5, -2.3)
     amp_noise_nstd = 10 ** amp_noise_nstd
-    fr = random(10e6, 6e9)
-    Qr = random(1e3, 1e6)
+    fr = random_log(10e6, 10e9)
+    Qr = random_log(1e3, 1e6)
     amp = random(1e-3, 1 - 1e-5)
     phi = random(-np.pi / 2, np.pi / 2)
-    a = random(0, 2)
+    a = random(0, 1)
 
     p_amp0 = random(-5e-21, 5e-21)
     p_amp1 = random(-8e-8, 8e-8)

@@ -1,7 +1,10 @@
 import numpy as np
+from .plot import plot_update_fres
 
 # Need to update docstrings, imports
-def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
+def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance',
+                cable_delay = 0, plotq = False, res_indices = None, 
+                plot_directory = ''):
     """
     Update resonance frequencies given fine sweep data
 
@@ -13,16 +16,22 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
     method (str): 'mins21' to update using the minimum of |S21|. 'spacing' to
         update using the maximum spacing between adjacent IQ points. 'distance'
         to update using the point of furthest distance from the off-resonance
-        point. 'none' to return fres.
+        point. 'none' to return fres
+    cable_delay (float): cable delay in seconds to remove before updating the 
+        frequency 
     fres (np.array or None): list of resonance frequencies in Hz
     qres (np.array or None): list of quality factors to cut if
         cut_other_resonators, or None. Cuts spans of fres / Qres from each
         sweep
+    plotq (bool): If True, plots all of the updated frequencies in batches
+    res_indices (array-like): resonator indices for plotting
+    plot_directory (str): directory to save plots
 
     Returns:
     fres_new (np.array): array of updated frequencies in Hz
     """
     fs, zs = np.asarray(fs), np.asarray(zs)
+    zs *= np.exp(1j * 2 * np.pi * fs * cable_delay)
     fres, qres = np.asarray(fres), np.asarray(qres)
     fcal_indices = np.asarray(fcal_indices)
     if method == 'none':
@@ -44,6 +53,8 @@ def update_fres(fs, zs, fres, qres, fcal_indices, method = 'distance'):
             fres_new.append(update(fi, zi))
         else:
             fres_new.append(np.mean(fi))
+    if plotq:
+        plot_update_fres(fs, zs, fres, fcal_indices, res_indices, cable_delay, plot_directory)
     return np.array(fres_new)
 
 def update_fr_minS21(f, z):
@@ -121,5 +132,5 @@ def cut_fine_scan(f, z, fres, spans):
     for fr, sp in zip(fres, spans):
         ix = (np.abs(f - fr) > sp) | (np.abs(f - fr_keep) < sp_keep)
         f, z = f[ix], z[ix]
-    # Needs to leave the current scan 
+    # Needs to leave the current scan
     return f, z

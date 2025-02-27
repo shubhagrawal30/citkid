@@ -137,7 +137,7 @@ def optimize_ares(rfsoc, fres, ares, qres, fcal_indices, max_dbm = -50,
             pbar0.set_description('fitting')
         data =\
         fit_iq(rfsoc.out_directory, None, file_suffix, 0, 0, 0, 0, 0, plotq = False, verbose = False)
-        a_nl = np.array(data.sort_values('resonatorIndex').iq_a, dtype = float)
+        a_nl = np.array(data.sort_values('dataIndex').iq_a, dtype = float)
         if len(a_nls):
             a_nl[a_nl == np.nan] = a_nls[-1][a_nl == np.nan]
         else:

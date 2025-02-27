@@ -43,14 +43,14 @@ def bounds_check(p0, bounds):
     lower_bounds = []
     upper_bounds = []
     for p, lb, ub in zip(p0, bounds[0], bounds[1]):
-        if p <= lb:
+        if p < lb:
             if p > 0:
                 lower_bounds.append(p * 0.9)
             else:
                 lower_bounds.append(p * 1.1)
         else:
             lower_bounds.append(lb)
-        if p >= ub:
+        if p > ub:
             if p > 0:
                 upper_bounds.append(p * 1.1)
             else:
@@ -114,7 +114,10 @@ def cardan(a, b, c, d):
     roots = np.asarray((u + v - z0, u * J + v * Jc - z0, u * Jc + v * J - z0))
     where_real = np.where(np.abs(np.imag(roots)) < 1e-15)
     if D > 0:
-        # three real roots: return the max
+        # two stable real roots: return the max. The other solution is the min
+        # max solution corresponds to a downward sweep. An upward sweep is more
+        # complicated to calculate. It will stay at the min to a certain point,
+        # then jump to the max. See Swenson et al. 2013 for details
         return np.max(np.real(roots))
     else:
         # one real root: return value with smallest imaginary component

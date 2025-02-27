@@ -4,8 +4,7 @@ import pyfftw
 
 def get_psd(x, dt, get_frequencies = False):
     """
-    Given a timeseries with a constant sample rate, calculates the power
-    spectral density.
+    Calculates the unilateral power spectral density magnitude of a timestream
 
     Parameters:
     x (np.array): timeseries data
@@ -20,13 +19,33 @@ def get_psd(x, dt, get_frequencies = False):
     if not get_frequencies:
         return psd
     f = np.fft.rfftfreq(len(x), d = dt)
-    return f, psd 
+    return f, psd
+
+def get_csd(x1, x2, dt):
+    """
+    Calculates the unilateral cross spectral density magnitude of two
+    timestreams
+
+    Parameters:
+    x1 (np.array): first timeseries data
+    x2 (np.array): second timeseries data
+    dt (float): sample rate of timeseries
+
+    Returns:
+    cpsd (np.array): cross spectral density
+    """
+    a1 = pyfftw.interfaces.numpy_fft.rfft(x1)
+    a2 = pyfftw.interfaces.numpy_fft.rfft(x2)
+    cpsd = 2 * np.conj(a1) * a2 * dt / len(x1)
+    cpsd = np.abs(cpsd)
+    f = np.fft.rfftfreq(len(x1), d = dt)
+    return f, cpsd
 
 ################################################################################
 ############################ Binning and filtering #############################
 ################################################################################
 def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None,
-            pt_frequency = 1.39296):
+            pt_frequency = 1.39296, statistic = 'mean'):
     """
     Bins noise data logarithmically. Optionally filters pulse tubes before
     binning and leaves frequencies below fmin unbinned.
@@ -41,6 +60,7 @@ def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None,
     filter_pt_n (int or None): number of pulse tube harmonics to filter out of
         the data before binning, or None to bypass pulse tube filtering
     pt_frequency (float): pulse tube frequency in Hz
+    statistic (str): statistic by which the bin values are calculated
 
     Returns:
     binned_data (list): values (np.array) are binned data corresponding to
@@ -63,7 +83,8 @@ def bin_psd(f, data, nbins = 500, fmin = 3, filter_pt_n = None,
     bin_counts = np.concatenate([bin_counts, [1]])
     bins  = bins[bin_counts != 0]
     # Bin data, and append unbinned data
-    binned_data = binned_statistic(f, data, bins = bins)[0]
+    binned_data = binned_statistic(f, data, bins = bins,
+                                   statistic = statistic)[0]
     binned_data = [np.concatenate([data0[i],
                             binned_data[i]]) for i in range(len(binned_data))]
     return binned_data

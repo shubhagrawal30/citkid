@@ -25,7 +25,7 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
     ffine (np.array): fine sweep frequency data
     zfine (np.array): fine sweep complex S21 data
     frs (list of float): resonance frequencies to cut from the gain scan
-    Qrs (list of float): Qrs to cut from the gain scan.
+    Qrs (list of float): spans of frs / Qrs are cut from the gain scan
     plotq (bool): If True, plots the fits.
     return_dataframe (bool): if True, returns the output of
         .data_io.make_fit_row instead of the separated data
@@ -44,10 +44,15 @@ def fit_nonlinear_iq_with_gain(fgain, zgain, ffine, zfine, frs, Qrs,
         fig (pyplot.figure or None): figure with gain fit and nonlinear IQ
             fit if plotq, or None
     """
-
+    # Remove gain
     p_amp, p_phase, zfine_rmvd, (fig_gain, axs_gain) = \
         fit_and_remove_gain_phase(fgain, zgain, ffine, zfine, frs, Qrs,
                                   plotq = plotq)
+    # Rotate data for better plots
+    zoff = np.mean(np.roll(zfine_rmvd, 6)[:6])
+    zfine_rmvd *= np.exp(-1j * np.angle(zoff))
+    p_phase[1] += np.angle(zoff)
+    # Fit IQ
     p0, popt, perr, res, (fig_fit, axs_fit) = fit_nonlinear_iq(ffine,
                                             zfine_rmvd, plotq = plotq, **kwargs)
     if plotq:
@@ -109,13 +114,14 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
         p0 = guess.guess_p0_nonlinear_iq(f, z)
     if bounds is None:
         # default bounds. Phi range is increased to avoid jumping at bounds
-        #                 fr,  Qr, amp,    phi,    a,   i0,   q0,     tau
-        bounds = ([np.min(f), 1e3, .01, -np.pi * 1.5, 0, -1e2, -1e2, -1.0e-6],
-                  [np.max(f), 1e7,   1,  np.pi * 1.5, 2,  1e2,  1e2,  1.0e-6])
-    for index in [1, 5, 6]: # For Qr and z0, the initial guess should be good
+        #                 fr,  Qr, amp,              phi,    a,   i0,   q0,     tau
+        bounds = ([np.min(f), 1e3, .01,        -np.pi / 2, 0, -1e2, -1e2, -1.0e-6],
+                  [np.max(f), 1e7,   1 - 1e-6,  np.pi / 2, 1,  1e2,  1e2,  1.0e-6])
+    for index in [1, 5, 6]:
         # These will be flipped in bounds_check if needed
-        bounds[0][index] = p0[index] / 10
-        bounds[1][index] = p0[index] * 10
+        if p0[index] != 0:
+            bounds[0][index] = p0[index] / 10
+            bounds[1][index] = p0[index] * 10
     if fr_guess is not None:
         p0[0] = fr_guess
     if tau_guess is not None:
@@ -128,7 +134,7 @@ def fit_nonlinear_iq(f, z, bounds = None, p0 = None, fr_guess = None,
     res_acceptable = False
     niter = 0
     while not res_acceptable:
-        popt, perr, res = fit_util(np.array(p0), np.array(bounds), fit_tau, f, 
+        popt, perr, res = fit_util(np.array(p0), np.array(bounds), fit_tau, f,
                                    z_stacked, z)
         if res < 1e-2 or niter > 1:
             res_acceptable = True
@@ -200,6 +206,11 @@ def fit_util(p0, bounds, fit_tau, f, z_stacked, z):
     perr (np.array): fit parameter uncertainties
     res (float): fit residuals
     """
+    #             fr,   Qr, amp, phi, a, i0, q0, tau
+    scaler = [100e-6, 1e-4,   1,   1, 1,  1,  1, 1e6]
+    p0 = [p0i * s for p0i, s in zip(p0, scaler)]
+    bounds[0] = [bi * s for bi, s in zip(bounds[0], scaler)]
+    bounds[1] = [bi * s for bi, s in zip(bounds[1], scaler)]
     if not fit_tau:
         # Fit with tau enforced from p0[7]
         tau = p0[7]
@@ -218,6 +229,8 @@ def fit_util(p0, bounds, fit_tau, f, z_stacked, z):
                               p0, bounds = bounds)
 
         perr = np.sqrt(np.diag(pcov))
+    popt = [pi / s for pi, s in zip(popt, scaler)]
+    perr = [pi / s for pi, s in zip(perr, scaler)]
     z_fit = nonlinear_iq(f, *popt)
     res = calculate_residuals(z, z_fit)
     return popt, perr, res

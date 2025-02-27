@@ -2,7 +2,7 @@ import numpy as np
 import os
 
 # Need to update docstrings, imports
-def import_iq_noise(directory, file_suffix, import_noiseq = True):
+def import_iq_noise(directory, file_suffix, noise_index = 0, import_noiseq = True):
     """
     Imports data from primecam.procedures.take_iq_noise
 
@@ -36,6 +36,7 @@ def import_iq_noise(directory, file_suffix, import_noiseq = True):
     ares = np.load(directory + f'ares{file_suffix}.npy')
     qres = np.load(directory + f'qres{file_suffix}.npy')
     fcal_indices = np.load(directory + f'fcal_indices{file_suffix}.npy')
+    res_indices = np.load(directory + f'res_indices{file_suffix}.npy')
     path = directory + f'fres_all{file_suffix}.npy'
     if os.path.exists(path):
         fres_all = np.load(path)   
@@ -60,16 +61,15 @@ def import_iq_noise(directory, file_suffix, import_noiseq = True):
     path = directory + f's21_fine{file_suffix}.npy'
     ffine, ifine, qfine = np.load(path)
     zfine = ifine + 1j * qfine
-    paths = [p for p in os.listdir(directory) if f'noise{file_suffix}' in p and 'tsample' not in p]
-    paths = [directory + p for p in paths]
-    znoises = []
     if import_noiseq:
-        noise_dt = float(np.load(directory + f'noise{file_suffix}_tsample.npy'))
-        for path in paths:
-            inoise, qnoise = np.load(path)
-            znoise = inoise + 1j * qnoise
-            znoises.append(znoise)
+        path = directory + f'noise{file_suffix}_{noise_index:02d}.npy'
+        noise_dt = float(np.load(directory + f'noise{file_suffix}_tsample_{noise_index:02d}.npy'))
+        inoise, qnoise = np.load(path)
+        znoises = inoise + 1j * qnoise
+        fres_noise = np.load(directory + f'fres_noise{file_suffix}.npy')
     else:
         noise_dt = None
+        znoises = None 
+        fres_noise = None
     return fres_initial, fres, ares, qres, fcal_indices, fres_all, qres_all, frough, zrough,\
-           fgain, zgain, ffine, zfine, znoises, noise_dt
+           fgain, zgain, ffine, zfine, znoises, noise_dt, res_indices, fres_noise

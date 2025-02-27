@@ -109,7 +109,7 @@ def fit_gain(f, z, fr_spans, plotq = False):
 
     # reject outliers and fit
     ix = abs(dB - np.mean(dB)) < 5 * np.std(dB)
-    f, z, dB, phase = f[ix], z[ix], dB[ix], phase[ix]
+    f, z, dB, phase = f[ix], z[ix], dB[ix], phase[ix] 
     try:
         p_amp = np.polyfit(f, dB, 2)
         # Fit to each cut portion of phase separately, to avoid unwrapping problems
@@ -120,7 +120,18 @@ def fit_gain(f, z, fr_spans, plotq = False):
             ix = (f >= fcut[0]) & (f <= fcut[1])
             if len(f[ix]) >= 4:
                 pps.append(np.polyfit(f[ix], phase[ix], 1))
-                dlens.append(len(f[ix]))
+                dlens.append(len(f[ix])) 
+        
+        if not len(pps): 
+            # If there aren't any consecutive sets of 4 points, try again with 2 points as the limit
+            # this won't do a very good job but it's better than throwing away the data 
+            # Better solution is longer fine scan
+            # warnings.warn("No consecutive groups of 4+ points in the gain scan. Try increasing the span or reducing the resonator cut spans", UserWarning)
+            for fcut in fcuts:
+                ix = (f >= fcut[0]) & (f <= fcut[1])
+                if len(f[ix]) >= 2:
+                    pps.append(np.polyfit(f[ix], phase[ix], 1))
+                    dlens.append(len(f[ix])) 
         # Need to reject fits with few data points if there are 
         # other fits to make up for them  
         pps, dlens = np.asarray(pps), np.asarray(dlens)
@@ -131,6 +142,7 @@ def fit_gain(f, z, fr_spans, plotq = False):
             pps0 = pps[dlens > i] 
             if i < 1:
                 raise Exception('No phase data to fit')
+        pps0 = [p[np.isfinite(p)] for p in pps0]
         p_phase = np.mean(pps0, axis = 0)
     except Exception as e:
         p_amp = np.array([np.nan,np.nan,np.nan])
