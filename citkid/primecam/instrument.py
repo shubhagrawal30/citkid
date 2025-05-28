@@ -8,6 +8,7 @@ import shutil
 import paramiko
 import numpy as np
 from ..util import fix_path
+import _config
 
 class RFSOC:
     def __init__(self, out_directory, bid = 1, drid = 1,
@@ -38,9 +39,11 @@ class RFSOC:
         from queen import alcoveCommand
         from alcove_commands.tones import genPhis
         from alcove import comNumFromStr
+        from alcove_commands.board_io import file
         self.comNumFromStr = comNumFromStr
         self.alcoveCommand = alcoveCommand
         self.genPhis = genPhis
+        self.bfile = file
         # Set system variables
         self.bid = bid
         self.drid = drid
@@ -370,18 +373,20 @@ class RFSOC:
         ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         # Connect to the xilinx board
-        hostname = '192.168.2.98'
-        port = 22
-        username = 'xilinx'
-        password = 'xilinx'
+        hostname = _config.xilinx_ip
+        port = _config.xilinx_sshport
+        username = _config.xilinx_username
+        password = _config.xilinx_password
         ssh.connect(hostname, port, username, password)
         # Transfer files to the board
         scp = ssh.open_sftp()
         files = ['custom_freqs.npy', 'custom_amps.npy', 'custom_phis.npy']
-        remote_directory = '/home/xilinx/primecam_readout/src/alcove_commands/'
-        for file in files:
-            local_path = self.tmp_directory + file
-            remote_path = remote_directory + file
+        bfiles = [self.bfile.f_rf_tones_comb_cust, 
+                  self.bfile.a_tones_comb_cust, self.bfile.p_tones_comb_cust] 
+        # remote_directory = '/home/xilinx/primecam_readout/src/alcove_commands/'
+        for f, bf in zip(files, bfiles):
+            local_path = self.tmp_directory + f
+            remote_path = bf
             scp.put(local_path, remote_path, confirm = False)
         # Close connection
         scp.close()
