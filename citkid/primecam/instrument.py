@@ -364,7 +364,7 @@ class RFSOC:
         for file in files:
             os.remove(self.tmp_directory + file)
 
-    def transfer_custom_tone_lists(self):
+    def transfer_custom_tone_lists(self, attmpt_scp=True):
         """
         Transfers the custom tone lists from tmp_directory to the board
         """
@@ -378,9 +378,10 @@ class RFSOC:
         username = _config.xilinx_username
         password = _config.xilinx_password
         git_path = _config.xilinx_git_path
-        # ssh.connect(hostname, port, username, password)
-        # Transfer files to the board
-        # scp = ssh.open_sftp()
+        if attmpt_scp:
+            ssh.connect(hostname, port, username, password)
+            # Transfer files to the board
+            scp = ssh.open_sftp()
         files = ['custom_freqs.npy', 'custom_amps.npy', 'custom_phis.npy']
         bfiles = [self.bfile.f_rf_tones_comb_cust['fname'], 
                   self.bfile.a_tones_comb_cust['fname'], self.bfile.p_tones_comb_cust['fname']] 
@@ -388,12 +389,14 @@ class RFSOC:
             local_path = self.tmp_directory + f
             remote_path = f"{git_path}/drones/drone{self.drid}/{bf}.npy"
             print(local_path, remote_path)
-            # scp.put(local_path, remote_path, confirm = False)
+            if attmpt_scp:
+                scp.put(local_path, remote_path, confirm = False)
         # Close connection
-        # scp.close()
+        if attmpt_scp:
+            scp.close()
         ssh.close()
 
-    def make_custom_tone_lists(self, fres, ares = None, pres = None):
+    def make_custom_tone_lists(self, fres, ares = None, pres = None, attmpt_scp=True):
         """
         Creates custom amplitude and phi lists from the give tone list, and
         saves all three files to the board
@@ -416,7 +419,7 @@ class RFSOC:
                               'custom_phis.npy'],
                              [fres, ares, pres]):
             np.save(self.tmp_directory + file, res)
-        self.transfer_custom_tone_lists()
+        self.transfer_custom_tone_lists(attmpt_scp=attmpt_scp)
 
 def separate_iq_data(path):
     """
