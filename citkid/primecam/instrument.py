@@ -8,7 +8,7 @@ import shutil
 import paramiko
 import numpy as np
 from ..util import fix_path
-import _config
+from . import _config
 
 class RFSOC:
     def __init__(self, out_directory, bid = 1, drid = 1,
@@ -26,7 +26,7 @@ class RFSOC:
         """
         # Create tmp and log directories
         directory = fix_path(os.getcwd())
-        self.tmp_directory = directory + 'tmp/'
+        self.tmp_directory = directory + 'tmp/' + 'drone' + str(drid) + '/'
         self.log_directory = '/'.join(directory.split('/')[:-2]) + '/'+ 'logs/'
         for d in (self.tmp_directory, self.log_directory):
             os.makedirs(d, exist_ok = True)
@@ -184,7 +184,7 @@ class RFSOC:
         if filename and not filename[-4:] == '.npy':
             raise ValueError(f'filename must end in .npy')
         com_num = self.comNumFromStr('vnaSweep')
-        args = f"N_steps={npoints}, N_accums={N_accums}"
+        args = f"sweep_steps={npoints}, sweep_accums={N_accums}"
 
         with hidePrints():
             response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
@@ -208,7 +208,7 @@ class RFSOC:
         if filename and not filename[-4:] == '.npy':
             raise ValueError(f'filename must end in .npy')
         com_num = self.comNumFromStr('targetSweep')
-        args = f"N_steps={npoints},chan_bandwidth={bandwidth},N_accums={N_accums}"
+        args = f"sweep_steps={npoints},chan_bw={bandwidth},sweep_accums={N_accums}"
 
         with hidePrints():
             response = self.alcoveCommand(com_num, bid = self.bid, drid = self.drid,
@@ -377,19 +377,20 @@ class RFSOC:
         port = _config.xilinx_sshport
         username = _config.xilinx_username
         password = _config.xilinx_password
-        ssh.connect(hostname, port, username, password)
+        git_path = _config.xilinx_git_path
+        # ssh.connect(hostname, port, username, password)
         # Transfer files to the board
-        scp = ssh.open_sftp()
+        # scp = ssh.open_sftp()
         files = ['custom_freqs.npy', 'custom_amps.npy', 'custom_phis.npy']
-        bfiles = [self.bfile.f_rf_tones_comb_cust, 
-                  self.bfile.a_tones_comb_cust, self.bfile.p_tones_comb_cust] 
-        # remote_directory = '/home/xilinx/primecam_readout/src/alcove_commands/'
+        bfiles = [self.bfile.f_rf_tones_comb_cust['fname'], 
+                  self.bfile.a_tones_comb_cust['fname'], self.bfile.p_tones_comb_cust['fname']] 
         for f, bf in zip(files, bfiles):
             local_path = self.tmp_directory + f
-            remote_path = bf
-            scp.put(local_path, remote_path, confirm = False)
+            remote_path = f"{git_path}/drones/drone{self.drid}/{bf}.npy"
+            print(local_path, remote_path)
+            # scp.put(local_path, remote_path, confirm = False)
         # Close connection
-        scp.close()
+        # scp.close()
         ssh.close()
 
     def make_custom_tone_lists(self, fres, ares = None, pres = None):
