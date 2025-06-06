@@ -41,7 +41,8 @@ dependencies = [
   "pandas",
   "matplotlib",
   "pyfftw",
-  "numba"
+  "numba",
+  "paramiko"
 ]
 
 [project.urls]
