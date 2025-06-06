@@ -1,3 +1,6 @@
+# Fork of CIT KID package for TIM development
+
+
 # Kinetic Inductance Detector data acquisition and analysis
 Collection of Kinetic Inductance Detector (KID) data acquisition and analysis code. Currently implemented analyses are:
 <ul>
