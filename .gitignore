@@ -165,3 +165,7 @@ cython_debug/
 # Redis
 citkid/primecam/dump.rdb
 citkid/primecam/dump.rdb
+
+tmp/
+
+**/dump.rdb
